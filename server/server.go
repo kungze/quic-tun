@@ -52,6 +52,9 @@ func (s *ServerEndpoint) establishTunnel(sess *quic.Session) {
 		klog.InfoS("Tunnel closed", "client endpoint", remoteAddr)
 	}()
 	conn, err := s.handshake(&stream)
+	if err != nil {
+		return
+	}
 	defer conn.Close()
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -74,7 +77,10 @@ func (s *ServerEndpoint) handshake(stream *quic.Stream) (net.Conn, error) {
 	if err != nil {
 		klog.ErrorS(err, "Failed to dial server app", "server address", hsh.ReceiveData)
 		hsh.SendData = []byte{constants.HandshakeFailure}
-		io.Copy(*stream, &hsh)
+		_, err = io.Copy(*stream, &hsh)
+		if err != nil {
+			klog.ErrorS(err, "Failed to dial server app", "server address", hsh.ReceiveData)
+		}
 		return nil, err
 	}
 	klog.Info("Server app connect successful")
@@ -87,7 +93,7 @@ func (s *ServerEndpoint) handshake(stream *quic.Stream) (net.Conn, error) {
 	return conn, nil
 }
 
-func (s *ServerEndpoint) clientToServer(server *net.Conn, client *quic.Stream, wg *sync.WaitGroup) error {
+func (s *ServerEndpoint) clientToServer(server *net.Conn, client *quic.Stream, wg *sync.WaitGroup) {
 	defer func() {
 		wg.Done()
 		(*client).Close()
@@ -96,12 +102,10 @@ func (s *ServerEndpoint) clientToServer(server *net.Conn, client *quic.Stream, w
 	_, err := io.Copy(*server, *client)
 	if err != nil {
 		klog.ErrorS(err, "Can not forward packet from client to server")
-		return err
 	}
-	return nil
 }
 
-func (s *ServerEndpoint) serverToClient(server *net.Conn, client *quic.Stream, wg *sync.WaitGroup) error {
+func (s *ServerEndpoint) serverToClient(server *net.Conn, client *quic.Stream, wg *sync.WaitGroup) {
 	defer func() {
 		wg.Done()
 		(*client).Close()
@@ -110,9 +114,7 @@ func (s *ServerEndpoint) serverToClient(server *net.Conn, client *quic.Stream, w
 	_, err := io.Copy(*client, *server)
 	if err != nil {
 		klog.ErrorS(err, "Can not forward packet from server to client")
-		return err
 	}
-	return nil
 }
 
 // Setup a bare-bones TLS config for the server

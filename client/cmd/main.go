@@ -20,7 +20,10 @@ func main() {
 		Short: "Start up the client side endpoint",
 		Run: func(cmd *cobra.Command, args []string) {
 			c := client.ClientEndpoint{LocalSocket: localSocket, ServerEndpointSocket: serverEndpointSocket, Token: token}
-			c.Start()
+			err := c.Start()
+			if err != nil {
+				klog.ErrorS(err, "Failed to start client endpoint")
+			}
 		},
 	}
 	defer klog.Flush()

@@ -3,7 +3,8 @@ name: goreleaser
 on:
   pull_request:
   push:
-
+    branches:
+      - master
 permissions:
   contents: write
 
@@ -13,9 +14,7 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v3
       -
         name: Fetch all tags
         run: git fetch --force --tags

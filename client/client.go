@@ -40,7 +40,7 @@ func (c *ClientEndpoint) Start() error {
 	}
 }
 
-func (c *ClientEndpoint) clientToServer(client *net.Conn, server *quic.Stream, wg *sync.WaitGroup) error {
+func (c *ClientEndpoint) clientToServer(client *net.Conn, server *quic.Stream, wg *sync.WaitGroup) {
 	defer func() {
 		(*client).Close()
 		(*server).Close()
@@ -49,12 +49,10 @@ func (c *ClientEndpoint) clientToServer(client *net.Conn, server *quic.Stream, w
 	_, err := io.Copy(*server, *client)
 	if err != nil {
 		klog.ErrorS(err, "Can not forward packet from client to server")
-		return err
 	}
-	return nil
 }
 
-func (c *ClientEndpoint) serverToClient(client *net.Conn, server *quic.Stream, wg *sync.WaitGroup) error {
+func (c *ClientEndpoint) serverToClient(client *net.Conn, server *quic.Stream, wg *sync.WaitGroup) {
 	defer func() {
 		(*client).Close()
 		(*server).Close()
@@ -63,12 +61,10 @@ func (c *ClientEndpoint) serverToClient(client *net.Conn, server *quic.Stream, w
 	_, err := io.Copy(*client, *server)
 	if err != nil {
 		klog.ErrorS(err, "Can not forward packet from server to client")
-		return err
 	}
-	return nil
 }
 
-func (c *ClientEndpoint) establishTunnel(conn *net.Conn) error {
+func (c *ClientEndpoint) establishTunnel(conn *net.Conn) {
 	defer func() {
 		(*conn).Close()
 		klog.InfoS("Tunnel closed", "client app", (*conn).RemoteAddr())
@@ -81,17 +77,17 @@ func (c *ClientEndpoint) establishTunnel(conn *net.Conn) error {
 	session, err := quic.DialAddr(c.ServerEndpointSocket, tlsConf, &quic.Config{KeepAlive: true})
 	if err != nil {
 		klog.ErrorS(err, "Failed to dial server endpoint")
-		return err
+		return
 	}
 	stream, err := session.OpenStreamSync(context.Background())
 	if err != nil {
 		klog.ErrorS(err, "Failed to open stream to server endpoint")
-		return err
+		return
 	}
 	defer stream.Close()
 	err = c.handshake(&stream)
 	if err != nil {
-		return err
+		return
 	}
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -99,7 +95,6 @@ func (c *ClientEndpoint) establishTunnel(conn *net.Conn) error {
 	go c.serverToClient(conn, &stream, &wg)
 	klog.InfoS("Tunnel established", "server endpoint", c.ServerEndpointSocket)
 	wg.Wait()
-	return nil
 }
 
 func (c *ClientEndpoint) handshake(stream *quic.Stream) error {

@@ -22,7 +22,10 @@ func main() {
 			s := &server.ServerEndpoint{
 				Address: listenSocket,
 			}
-			s.Start()
+			err := s.Start()
+			if err != nil {
+				klog.ErrorS(err, "Failed to start server endpoint")
+			}
 		},
 	}
 	defer klog.Flush()
