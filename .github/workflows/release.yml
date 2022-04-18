@@ -3,8 +3,8 @@ name: goreleaser
 on:
   pull_request:
   push:
-    branches:
-      - master
+    tags:
+      - "v**"
 permissions:
   contents: write
 
