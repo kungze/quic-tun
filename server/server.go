@@ -2,13 +2,8 @@ package server
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"io"
-	"math/big"
 	"net"
 	"sync"
 
@@ -19,15 +14,17 @@ import (
 )
 
 type ServerEndpoint struct {
-	Address string
+	Address   string
+	TlsConfig *tls.Config
 }
 
 func (s *ServerEndpoint) Start() error {
-	listener, err := quic.ListenAddr(s.Address, generateTLSConfig(), nil)
+	listener, err := quic.ListenAddr(s.Address, s.TlsConfig, nil)
 	if err != nil {
 		panic(err)
 	}
 	defer listener.Close()
+	klog.InfoS("Server endpoint start up successful", "listen address", listener.Addr())
 	for {
 		sess, err := listener.Accept(context.Background())
 		if err != nil {
@@ -114,29 +111,5 @@ func (s *ServerEndpoint) serverToClient(server *net.Conn, client *quic.Stream, w
 	_, err := io.Copy(*client, *server)
 	if err != nil {
 		klog.ErrorS(err, "Can not forward packet from server to client")
-	}
-}
-
-// Setup a bare-bones TLS config for the server
-func generateTLSConfig() *tls.Config {
-	key, err := rsa.GenerateKey(rand.Reader, 1024)
-	if err != nil {
-		panic(err)
-	}
-	template := x509.Certificate{SerialNumber: big.NewInt(1)}
-	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
-	if err != nil {
-		panic(err)
-	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-
-	tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		panic(err)
-	}
-	return &tls.Config{
-		Certificates: []tls.Certificate{tlsCert},
-		NextProtos:   []string{"quic-tun"},
 	}
 }

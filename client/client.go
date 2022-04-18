@@ -19,6 +19,7 @@ type ClientEndpoint struct {
 	LocalSocket          string
 	ServerEndpointSocket string
 	Token                string
+	TlsConfig            *tls.Config
 }
 
 func (c *ClientEndpoint) Start() error {
@@ -29,6 +30,7 @@ func (c *ClientEndpoint) Start() error {
 		return err
 	}
 	defer listener.Close()
+	klog.InfoS("Client endpoint start up successful", "listen address", listener.Addr())
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -70,11 +72,7 @@ func (c *ClientEndpoint) establishTunnel(conn *net.Conn) {
 		klog.InfoS("Tunnel closed", "client app", (*conn).RemoteAddr())
 	}()
 	klog.Info("Establishing a new tunnel", "remote", c.ServerEndpointSocket)
-	tlsConf := &tls.Config{
-		InsecureSkipVerify: true,
-		NextProtos:         []string{"quic-tun"},
-	}
-	session, err := quic.DialAddr(c.ServerEndpointSocket, tlsConf, &quic.Config{KeepAlive: true})
+	session, err := quic.DialAddr(c.ServerEndpointSocket, c.TlsConfig, &quic.Config{KeepAlive: true})
 	if err != nil {
 		klog.ErrorS(err, "Failed to dial server endpoint")
 		return
