@@ -7,8 +7,8 @@ import (
 	"net"
 	"sync"
 
-	"github.com/jeffyjf/quic-tun/pkg/constants"
-	"github.com/jeffyjf/quic-tun/pkg/handshake"
+	"github.com/kungze/quic-tun/pkg/constants"
+	"github.com/kungze/quic-tun/pkg/handshake"
 	quic "github.com/lucas-clemente/quic-go"
 	"k8s.io/klog/v2"
 )

@@ -9,7 +9,7 @@ import (
 	"crypto/x509"
 	"os"
 
-	"github.com/jeffyjf/quic-tun/client"
+	"github.com/kungze/quic-tun/client"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 )

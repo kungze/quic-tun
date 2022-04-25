@@ -13,7 +13,7 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/jeffyjf/quic-tun/server"
+	"github.com/kungze/quic-tun/server"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 )
