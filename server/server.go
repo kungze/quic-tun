@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"io"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/kungze/quic-tun/pkg/constants"
@@ -70,7 +71,8 @@ func (s *ServerEndpoint) handshake(stream *quic.Stream) (net.Conn, error) {
 		return nil, err
 	}
 	klog.InfoS("starting connect to server app", "server app", hsh.ReceiveData)
-	conn, err := net.Dial("tcp", hsh.ReceiveData)
+	sockets := strings.Split(hsh.ReceiveData, ":")
+	conn, err := net.Dial(strings.ToLower(sockets[0]), strings.Join(sockets[1:], ":"))
 	if err != nil {
 		klog.ErrorS(err, "Failed to dial server app", "server address", hsh.ReceiveData)
 		hsh.SendData = []byte{constants.HandshakeFailure}
