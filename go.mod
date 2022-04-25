@@ -1,4 +1,4 @@
-module github.com/jeffyjf/quic-tun
+module github.com/kungze/quic-tun
 
 go 1.18
 
