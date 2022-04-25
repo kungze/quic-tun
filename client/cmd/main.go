@@ -65,7 +65,7 @@ func main() {
 	defer klog.Flush()
 	rootCmd.PersistentFlags().StringVar(&localSocket, "listen-on", "tcp:127.0.0.1:6500", "The socket that the client side endpoint listen on.")
 	rootCmd.PersistentFlags().StringVar(&serverEndpointSocket, "server-endpoint", "", "The server side endpoint address, example: example.com:6565")
-	rootCmd.PersistentFlags().StringVar(&token, "token", "", "Used to tell the server endpoint which server app we want to connect.")
+	rootCmd.PersistentFlags().StringVar(&token, "token", "", "Used to tell the server endpoint which server app we want to connect, example: tcp:10.0.0.1:1234")
 	rootCmd.PersistentFlags().StringVar(&certFile, "cert-file", "", "The certificate file path, this is required if the --verify-client is True in server endpoint.")
 	rootCmd.PersistentFlags().StringVar(&keyFile, "key-file", "", "The private key file path, this is required if the --verify-client is True in server endpoint.")
 	rootCmd.PersistentFlags().BoolVar(&insecureSkipVerify, "insecure-skip-verify", false, "Whether skip verify server endpoint.")

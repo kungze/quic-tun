@@ -62,7 +62,7 @@ Start up server side endpoint
 Start up client side endpoint
 
 ```
-./quictun-client --listen-on tcp:127.0.0.1:6500 --server-endpoint 172.18.31.36:7500 --token 172.18.30.117:22 --insecure-skip-verify True
+./quictun-client --listen-on tcp:127.0.0.1:6500 --server-endpoint 172.18.31.36:7500 --token tcp:172.18.30.117:22 --insecure-skip-verify True
 ```
 
 **Note:** The value specified by `--token` used to tell `quictun-server` the application address that the client want to access.
