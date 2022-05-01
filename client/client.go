@@ -35,14 +35,73 @@ func (c *ClientEndpoint) Start() error {
 		conn, err := listener.Accept()
 		if err != nil {
 			klog.ErrorS(err, "Client app connect failed")
-			return err
+		} else {
+			logger := klog.NewKlogr().WithValues("Client-App-Addr", conn.RemoteAddr().String())
+			ctx := klog.NewContext(context.TODO(), logger)
+			logger.Info("Accepted a client connection")
+			go func() {
+				defer func() {
+					conn.Close()
+					logger.Info("Tunnel closed")
+				}()
+				c.establishTunnel(ctx, &conn)
+			}()
+
 		}
-		klog.InfoS("Accepted a client connection", "client app addr", conn.RemoteAddr().String())
-		go c.establishTunnel(&conn)
 	}
 }
 
-func (c *ClientEndpoint) clientToServer(client *net.Conn, server *quic.Stream, wg *sync.WaitGroup) {
+func (c *ClientEndpoint) establishTunnel(ctx context.Context, conn *net.Conn) {
+	logger := klog.FromContext(ctx)
+	logger.Info("Establishing a new tunnel.")
+	session, err := quic.DialAddr(c.ServerEndpointSocket, c.TlsConfig, &quic.Config{KeepAlive: true})
+	if err != nil {
+		logger.Error(err, "Failed to dial server endpoint.")
+		return
+	}
+	logger = logger.WithValues("Local-Addr", session.LocalAddr().String())
+	stream, err := session.OpenStreamSync(context.Background())
+	if err != nil {
+		logger.Error(err, "Failed to open stream to server endpoint.")
+		return
+	}
+	defer stream.Close()
+	err = c.handshake(logger, &stream)
+	if err != nil {
+		return
+	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go c.clientToServer(logger, conn, &stream, &wg)
+	go c.serverToClient(logger, conn, &stream, &wg)
+	logger.Info("Tunnel established")
+	wg.Wait()
+}
+
+func (c *ClientEndpoint) handshake(logger klog.Logger, stream *quic.Stream) error {
+	logger.Info("Starting handshake with server endpoint")
+	hsh := handshake.NewHandshakeHelper([]byte(c.Token), constants.TokenLength)
+	_, err := io.CopyN(*stream, &hsh, constants.TokenLength)
+	if err != nil {
+		logger.Error(err, "Failed to send token")
+		return err
+	}
+	_, err = io.CopyN(&hsh, *stream, constants.AckMsgLength)
+	if err != nil {
+		logger.Error(err, "Failed to receive ack")
+		return err
+	}
+	switch hsh.ReceiveData[0] {
+	case constants.HandshakeSuccess:
+		logger.Info("Handshake successful")
+		return nil
+	default:
+		logger.Info("Received an unkone ack info", "ack", hsh.ReceiveData)
+		return errors.New("Handshake error! Received an unkone ack info.")
+	}
+}
+
+func (c *ClientEndpoint) clientToServer(logger klog.Logger, client *net.Conn, server *quic.Stream, wg *sync.WaitGroup) {
 	defer func() {
 		(*client).Close()
 		(*server).Close()
@@ -50,11 +109,11 @@ func (c *ClientEndpoint) clientToServer(client *net.Conn, server *quic.Stream, w
 	}()
 	_, err := io.Copy(*server, *client)
 	if err != nil {
-		klog.ErrorS(err, "Can not forward packet from client to server")
+		logger.Error(err, "Can not forward packet from client to server")
 	}
 }
 
-func (c *ClientEndpoint) serverToClient(client *net.Conn, server *quic.Stream, wg *sync.WaitGroup) {
+func (c *ClientEndpoint) serverToClient(logger klog.Logger, client *net.Conn, server *quic.Stream, wg *sync.WaitGroup) {
 	defer func() {
 		(*client).Close()
 		(*server).Close()
@@ -62,58 +121,6 @@ func (c *ClientEndpoint) serverToClient(client *net.Conn, server *quic.Stream, w
 	}()
 	_, err := io.Copy(*client, *server)
 	if err != nil {
-		klog.ErrorS(err, "Can not forward packet from server to client")
-	}
-}
-
-func (c *ClientEndpoint) establishTunnel(conn *net.Conn) {
-	defer func() {
-		(*conn).Close()
-		klog.InfoS("Tunnel closed", "client app", (*conn).RemoteAddr())
-	}()
-	klog.Info("Establishing a new tunnel", "remote", c.ServerEndpointSocket)
-	session, err := quic.DialAddr(c.ServerEndpointSocket, c.TlsConfig, &quic.Config{KeepAlive: true})
-	if err != nil {
-		klog.ErrorS(err, "Failed to dial server endpoint")
-		return
-	}
-	stream, err := session.OpenStreamSync(context.Background())
-	if err != nil {
-		klog.ErrorS(err, "Failed to open stream to server endpoint")
-		return
-	}
-	defer stream.Close()
-	err = c.handshake(&stream)
-	if err != nil {
-		return
-	}
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go c.clientToServer(conn, &stream, &wg)
-	go c.serverToClient(conn, &stream, &wg)
-	klog.InfoS("Tunnel established", "server endpoint", c.ServerEndpointSocket)
-	wg.Wait()
-}
-
-func (c *ClientEndpoint) handshake(stream *quic.Stream) error {
-	klog.InfoS("Startinig handshake with server endpoint", "token", c.Token)
-	hsh := handshake.NewHandshakeHelper([]byte(c.Token), constants.TokenLength)
-	_, err := io.CopyN(*stream, &hsh, constants.TokenLength)
-	if err != nil {
-		klog.ErrorS(err, "Failed to send token")
-		return err
-	}
-	_, err = io.CopyN(&hsh, *stream, constants.AckMsgLength)
-	if err != nil {
-		klog.ErrorS(err, "Failed to receive ack")
-		return err
-	}
-	switch hsh.ReceiveData[0] {
-	case constants.HandshakeSuccess:
-		klog.Info("Handshake successful")
-		return nil
-	default:
-		klog.InfoS("Received an unkone ack info", "ack", hsh.ReceiveData)
-		return errors.New("Handshake error! Received an unkone ack info.")
+		logger.Error(err, "Can not forward packet from server to client")
 	}
 }
