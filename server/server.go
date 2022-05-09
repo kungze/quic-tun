@@ -10,13 +10,15 @@ import (
 
 	"github.com/kungze/quic-tun/pkg/constants"
 	"github.com/kungze/quic-tun/pkg/handshake"
+	"github.com/kungze/quic-tun/pkg/token"
 	quic "github.com/lucas-clemente/quic-go"
 	"k8s.io/klog/v2"
 )
 
 type ServerEndpoint struct {
-	Address   string
-	TlsConfig *tls.Config
+	Address     string
+	TlsConfig   *tls.Config
+	TokenParser token.TokenParsePlugin
 }
 
 func (s *ServerEndpoint) Start() error {
@@ -71,17 +73,21 @@ func (s *ServerEndpoint) handshake(logger klog.Logger, stream *quic.Stream) (net
 		logger.Error(err, "Can not receive token")
 		return nil, err
 	}
-	logger = logger.WithValues("Server-App-Addr", hsh.ReceiveData)
+	addr, err := s.TokenParser.ParseToken(hsh.ReceiveData)
+	if err != nil {
+		logger.Error(err, "Failed to parse token")
+		hsh.SendData = []byte{constants.ParserTokenError}
+		_, _ = io.Copy(*stream, &hsh)
+		return nil, err
+	}
+	logger = logger.WithValues("Server-App-Addr", addr)
 	logger.Info("starting connect to server app")
-	sockets := strings.Split(hsh.ReceiveData, ":")
+	sockets := strings.Split(addr, ":")
 	conn, err := net.Dial(strings.ToLower(sockets[0]), strings.Join(sockets[1:], ":"))
 	if err != nil {
 		logger.Error(err, "Failed to dial server app")
-		hsh.SendData = []byte{constants.HandshakeFailure}
-		_, err = io.Copy(*stream, &hsh)
-		if err != nil {
-			logger.Error(err, "Failed to dial server app")
-		}
+		hsh.SendData = []byte{constants.CannotConnServer}
+		_, _ = io.Copy(*stream, &hsh)
 		return nil, err
 	}
 	logger.Info("Server app connect successful")

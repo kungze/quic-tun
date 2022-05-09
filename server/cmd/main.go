@@ -10,16 +10,26 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"os"
+	"strings"
 
+	"github.com/kungze/quic-tun/pkg/token"
 	"github.com/kungze/quic-tun/server"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 )
 
-var listenSocket, keyFile, certFile, caFile string
-var verifyClient bool
+var (
+	listenSocket      string
+	keyFile           string
+	certFile          string
+	caFile            string
+	verifyClient      bool
+	tokenParserPlugin string
+	tokenParserKey    string
+)
 
 // Setup a bare-bones TLS config for the server
 func generateTLSConfig() *tls.Config {
@@ -42,6 +52,15 @@ func generateTLSConfig() *tls.Config {
 	return &tls.Config{
 		Certificates: []tls.Certificate{tlsCert},
 		NextProtos:   []string{"quic-tun"},
+	}
+}
+
+func loadTokenParserPlugin(plugin string, key string) token.TokenParsePlugin {
+	switch strings.ToLower(plugin) {
+	case "cleartext":
+		return token.NewCleartextTokenParser(key)
+	default:
+		panic(fmt.Sprintf("Token parser plugin %s don't support", plugin))
 	}
 }
 
@@ -84,8 +103,9 @@ func main() {
 			}
 
 			s := &server.ServerEndpoint{
-				Address:   listenSocket,
-				TlsConfig: tlsConfig,
+				Address:     listenSocket,
+				TlsConfig:   tlsConfig,
+				TokenParser: loadTokenParserPlugin(tokenParserPlugin, tokenParserKey),
 			}
 			err := s.Start()
 			if err != nil {
@@ -95,6 +115,8 @@ func main() {
 	}
 	defer klog.Flush()
 	rootCmd.PersistentFlags().StringVar(&listenSocket, "listen-on", "0.0.0.0:7500", "The address that quic-tun server side endpoint listen on")
+	rootCmd.PersistentFlags().StringVar(&tokenParserPlugin, "token-parser-plugin", "Cleartext", "The token parser plugin.")
+	rootCmd.PersistentFlags().StringVar(&tokenParserKey, "token-parser-key", "", "An argument to be passed to the token parse plugin on instantiation.")
 	rootCmd.PersistentFlags().StringVar(&keyFile, "key-file", "", "The private key file path.")
 	rootCmd.PersistentFlags().StringVar(&certFile, "cert-file", "", "The certificate file path")
 	rootCmd.PersistentFlags().BoolVar(&verifyClient, "verify-client", false, "Whether to require client certificate and verify it")

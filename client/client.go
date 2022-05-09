@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/kungze/quic-tun/pkg/constants"
 	"github.com/kungze/quic-tun/pkg/handshake"
+	"github.com/kungze/quic-tun/pkg/token"
 	"github.com/lucas-clemente/quic-go"
 	"k8s.io/klog/v2"
 )
@@ -18,7 +20,7 @@ import (
 type ClientEndpoint struct {
 	LocalSocket          string
 	ServerEndpointSocket string
-	Token                string
+	TokenSource          token.TokenSourcePlugin
 	TlsConfig            *tls.Config
 }
 
@@ -37,7 +39,7 @@ func (c *ClientEndpoint) Start() error {
 			klog.ErrorS(err, "Client app connect failed")
 		} else {
 			logger := klog.NewKlogr().WithValues("Client-App-Addr", conn.RemoteAddr().String())
-			ctx := klog.NewContext(context.TODO(), logger)
+			ctx := context.WithValue(klog.NewContext(context.TODO(), logger), "client-app-addr", conn.RemoteAddr().String())
 			logger.Info("Accepted a client connection")
 			go func() {
 				defer func() {
@@ -66,8 +68,9 @@ func (c *ClientEndpoint) establishTunnel(ctx context.Context, conn *net.Conn) {
 		return
 	}
 	defer stream.Close()
-	err = c.handshake(logger, &stream)
+	err = c.handshake(ctx, &stream)
 	if err != nil {
+		logger.Error(err, "Handshake failed.")
 		return
 	}
 	var wg sync.WaitGroup
@@ -78,10 +81,16 @@ func (c *ClientEndpoint) establishTunnel(ctx context.Context, conn *net.Conn) {
 	wg.Wait()
 }
 
-func (c *ClientEndpoint) handshake(logger klog.Logger, stream *quic.Stream) error {
+func (c *ClientEndpoint) handshake(ctx context.Context, stream *quic.Stream) error {
+	logger := klog.FromContext(ctx)
 	logger.Info("Starting handshake with server endpoint")
-	hsh := handshake.NewHandshakeHelper([]byte(c.Token), constants.TokenLength)
-	_, err := io.CopyN(*stream, &hsh, constants.TokenLength)
+	token, err := c.TokenSource.GetToken(fmt.Sprint(ctx.Value("client-app-addr")))
+	if err != nil {
+		logger.Error(err, "Encounter error.")
+		return err
+	}
+	hsh := handshake.NewHandshakeHelper([]byte(token), constants.TokenLength)
+	_, err = io.CopyN(*stream, &hsh, constants.TokenLength)
 	if err != nil {
 		logger.Error(err, "Failed to send token")
 		return err
@@ -95,6 +104,10 @@ func (c *ClientEndpoint) handshake(logger klog.Logger, stream *quic.Stream) erro
 	case constants.HandshakeSuccess:
 		logger.Info("Handshake successful")
 		return nil
+	case constants.ParserTokenError:
+		return errors.New("Server endpoint can not parser token.")
+	case constants.CannotConnServer:
+		return errors.New("Server endpoint can not connect to server application.")
 	default:
 		logger.Info("Received an unkone ack info", "ack", hsh.ReceiveData)
 		return errors.New("Handshake error! Received an unkone ack info.")
