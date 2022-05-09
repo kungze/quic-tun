@@ -7,15 +7,37 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/kungze/quic-tun/client"
+	"github.com/kungze/quic-tun/pkg/token"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 )
 
-var localSocket, serverEndpointSocket, token, certFile, keyFile, caFile string
-var insecureSkipVerify bool
+var (
+	localSocket          string
+	serverEndpointSocket string
+	tokenPlugin          string
+	tokenSource          string
+	certFile             string
+	keyFile              string
+	caFile               string
+	insecureSkipVerify   bool
+)
+
+func loadTokenSourcePlugin(plugin string, source string) token.TokenSourcePlugin {
+	switch strings.ToLower(plugin) {
+	case "fixed":
+		return token.NewFixedTokenPlugin(source)
+	case "file":
+		return token.NewFileTokenSourcePlugin(source)
+	default:
+		panic(fmt.Sprintf("The token source plugin %s is invalid", plugin))
+	}
+}
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -54,7 +76,8 @@ func main() {
 			c := client.ClientEndpoint{
 				LocalSocket:          localSocket,
 				ServerEndpointSocket: serverEndpointSocket,
-				Token:                token, TlsConfig: tlsConfig,
+				TokenSource:          loadTokenSourcePlugin(tokenPlugin, tokenSource),
+				TlsConfig:            tlsConfig,
 			}
 			err := c.Start()
 			if err != nil {
@@ -65,7 +88,10 @@ func main() {
 	defer klog.Flush()
 	rootCmd.PersistentFlags().StringVar(&localSocket, "listen-on", "tcp:127.0.0.1:6500", "The socket that the client side endpoint listen on.")
 	rootCmd.PersistentFlags().StringVar(&serverEndpointSocket, "server-endpoint", "", "The server side endpoint address, example: example.com:6565")
-	rootCmd.PersistentFlags().StringVar(&token, "token", "", "Used to tell the server endpoint which server app we want to connect, example: tcp:10.0.0.1:1234")
+	rootCmd.PersistentFlags().StringVar(
+		&tokenPlugin, "token-source-plugin", "Fixed",
+		"Specify the token plugin. Token used to tell the server endpoint which server app we want to access. Support values: Fixed, File.")
+	rootCmd.PersistentFlags().StringVar(&tokenSource, "token-source", "", "An argument to be passed to the token source plugin on instantiation.")
 	rootCmd.PersistentFlags().StringVar(&certFile, "cert-file", "", "The certificate file path, this is required if the --verify-client is True in server endpoint.")
 	rootCmd.PersistentFlags().StringVar(&keyFile, "key-file", "", "The private key file path, this is required if the --verify-client is True in server endpoint.")
 	rootCmd.PersistentFlags().BoolVar(&insecureSkipVerify, "insecure-skip-verify", false, "Whether skip verify server endpoint.")
