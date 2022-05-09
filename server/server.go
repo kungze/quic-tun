@@ -18,7 +18,7 @@ import (
 type ServerEndpoint struct {
 	Address     string
 	TlsConfig   *tls.Config
-	TokenParser token.TokenParsePlugin
+	TokenParser token.TokenParserPlugin
 }
 
 func (s *ServerEndpoint) Start() error {
