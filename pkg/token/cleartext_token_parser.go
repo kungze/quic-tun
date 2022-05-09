@@ -23,6 +23,9 @@ func (t cleartextTokerParser) ParseToken(token string) (string, error) {
 	}
 }
 
-func NewCleartextTokenParser(key string) cleartextTokerParser {
+// NewCleartextTokenParserPlugin return a ``Cleartext`` type token parser plugin.
+// The token parser plugin require the token from client endpoint mustn't be encrypted.
+// The key specify the token's enctype, it can be ``base64`` or a ""(null chart string).
+func NewCleartextTokenParserPlugin(key string) cleartextTokerParser {
 	return cleartextTokerParser{enctype: key}
 }

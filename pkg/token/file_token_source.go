@@ -28,6 +28,9 @@ func (t fileTokenSourcePlugin) GetToken(addr string) (string, error) {
 	return "", errors.New("Don't find valid token.")
 }
 
+// NewFileTokenSourcePlugin return a ``File`` type token source plugin.
+// ``File`` type token source plugin will read the token from a file.
+// The tokenSource is the file path.
 func NewFileTokenSourcePlugin(tokenSource string) fileTokenSourcePlugin {
 	return fileTokenSourcePlugin{filePath: tokenSource}
 }

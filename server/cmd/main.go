@@ -55,10 +55,10 @@ func generateTLSConfig() *tls.Config {
 	}
 }
 
-func loadTokenParserPlugin(plugin string, key string) token.TokenParsePlugin {
+func loadTokenParserPlugin(plugin string, key string) token.TokenParserPlugin {
 	switch strings.ToLower(plugin) {
 	case "cleartext":
-		return token.NewCleartextTokenParser(key)
+		return token.NewCleartextTokenParserPlugin(key)
 	default:
 		panic(fmt.Sprintf("Token parser plugin %s don't support", plugin))
 	}
