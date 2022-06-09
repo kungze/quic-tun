@@ -24,59 +24,63 @@ type ClientEndpoint struct {
 	TlsConfig            *tls.Config
 }
 
-func (c *ClientEndpoint) Start() error {
-	sockets := strings.Split(c.LocalSocket, ":")
-	listener, err := net.Listen(strings.ToLower(sockets[0]), strings.Join(sockets[1:], ":"))
+func (c *ClientEndpoint) Start() {
+	// Dial server endpoint
+	session, err := quic.DialAddr(c.ServerEndpointSocket, c.TlsConfig, &quic.Config{KeepAlive: true})
 	if err != nil {
-		klog.ErrorS(err, "Failed to start up")
-		return err
+		panic(err)
+	}
+	// Listen on a TCP or UNIX socket, wait client application's connection request.
+	localSocket := strings.Split(c.LocalSocket, ":")
+	listener, err := net.Listen(strings.ToLower(localSocket[0]), strings.Join(localSocket[1:], ":"))
+	if err != nil {
+		panic(err)
 	}
 	defer listener.Close()
 	klog.InfoS("Client endpoint start up successful", "listen address", listener.Addr())
 	for {
+		// Accept client application connectin request
 		conn, err := listener.Accept()
 		if err != nil {
 			klog.ErrorS(err, "Client app connect failed")
 		} else {
-			logger := klog.NewKlogr().WithValues("Client-App-Addr", conn.RemoteAddr().String())
-			ctx := context.WithValue(klog.NewContext(context.TODO(), logger), "client-app-addr", conn.RemoteAddr().String())
-			logger.Info("Accepted a client connection")
+			logger := klog.NewKlogr().WithValues(constants.ClientAppAddr, conn.RemoteAddr().String())
+			logger.Info("Client connection accepted, prepare to entablish tunnel with server endpint for this connection.")
 			go func() {
 				defer func() {
 					conn.Close()
 					logger.Info("Tunnel closed")
 				}()
-				c.establishTunnel(ctx, &conn)
+				// Open a quic stream for each client application connection.
+				stream, err := session.OpenStreamSync(context.Background())
+				if err != nil {
+					logger.Error(err, "Failed to open stream to server endpoint.")
+					return
+				}
+				defer stream.Close()
+				logger = logger.WithValues(constants.StreamID, stream.StreamID())
+				// Create a context argument for each new tunnel
+				ctx := context.WithValue(klog.NewContext(context.TODO(), logger), constants.CtxClientAppAddrKey, conn.RemoteAddr().String())
+				c.establishTunnel(ctx, &conn, &stream)
 			}()
-
 		}
 	}
 }
 
-func (c *ClientEndpoint) establishTunnel(ctx context.Context, conn *net.Conn) {
+func (c *ClientEndpoint) establishTunnel(ctx context.Context, conn *net.Conn, stream *quic.Stream) {
 	logger := klog.FromContext(ctx)
 	logger.Info("Establishing a new tunnel.")
-	session, err := quic.DialAddr(c.ServerEndpointSocket, c.TlsConfig, &quic.Config{KeepAlive: true})
-	if err != nil {
-		logger.Error(err, "Failed to dial server endpoint.")
-		return
-	}
-	logger = logger.WithValues("Local-Addr", session.LocalAddr().String())
-	stream, err := session.OpenStreamSync(context.Background())
-	if err != nil {
-		logger.Error(err, "Failed to open stream to server endpoint.")
-		return
-	}
-	defer stream.Close()
-	err = c.handshake(ctx, &stream)
+	// Sent token to server endpoint
+	err := c.handshake(ctx, stream)
 	if err != nil {
 		logger.Error(err, "Handshake failed.")
 		return
 	}
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go c.clientToServer(logger, conn, &stream, &wg)
-	go c.serverToClient(logger, conn, &stream, &wg)
+	// Exchange packets between server endpoint and client application.
+	go c.clientToServer(logger, conn, stream, &wg)
+	go c.serverToClient(logger, conn, stream, &wg)
 	logger.Info("Tunnel established")
 	wg.Wait()
 }
@@ -84,7 +88,7 @@ func (c *ClientEndpoint) establishTunnel(ctx context.Context, conn *net.Conn) {
 func (c *ClientEndpoint) handshake(ctx context.Context, stream *quic.Stream) error {
 	logger := klog.FromContext(ctx)
 	logger.Info("Starting handshake with server endpoint")
-	token, err := c.TokenSource.GetToken(fmt.Sprint(ctx.Value("client-app-addr")))
+	token, err := c.TokenSource.GetToken(fmt.Sprint(ctx.Value(constants.CtxClientAppAddrKey)))
 	if err != nil {
 		logger.Error(err, "Encounter error.")
 		return err
@@ -104,7 +108,7 @@ func (c *ClientEndpoint) handshake(ctx context.Context, stream *quic.Stream) err
 	case constants.HandshakeSuccess:
 		logger.Info("Handshake successful")
 		return nil
-	case constants.ParserTokenError:
+	case constants.ParseTokenError:
 		return errors.New("Server endpoint can not parser token.")
 	case constants.CannotConnServer:
 		return errors.New("Server endpoint can not connect to server application.")

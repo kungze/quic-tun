@@ -7,7 +7,6 @@
 [3]: https://img.shields.io/github/license/kungze/quic-tun
 [4]: LICENSE
 
-
 Establish a fast&security tunnel, make you can access remote TCP/UNIX
 application like local application.
 
@@ -39,29 +38,29 @@ If you encounter one or more above scenarios. Congratulations, you find the corr
 Increase the maximum buffer size, read the
 [docs](https://github.com/lucas-clemente/quic-go/wiki/UDP-Receive-Buffer-Size) for details
 
-```
+```shell
 sysctl -w net.core.rmem_max=2500000
 ```
 
 Download a corresponding one from precompiled from [releases](https://github.com/kungze/quic-tun/releases) and decompression it.
 
-```
+```shell
 wget https://github.com/kungze/quic-tun/releases/download/v0.0.1/quic-tun_0.0.1_linux_amd64.tar.gz
 ```
 
-```
+```shell
 tar xvfz quic-tun_0.0.1_linux_amd64.tar.gz
 ```
 
 Start up server side endpoint
 
-```
+```console
 ./quictun-server --listen-on 172.18.31.36:7500
 ```
 
 Start up client side endpoint
 
-```
+```console
 ./quictun-client --listen-on tcp:127.0.0.1:6500 --server-endpoint 172.18.31.36:7500 --token-source tcp:172.18.30.117:22 --insecure-skip-verify True
 ```
 
@@ -69,18 +68,17 @@ Start up client side endpoint
 
 Use `ssh` command to test
 
-```
+```console
 $ ssh root@127.0.0.1 -p 6500
 root@127.0.0.1's password:
 ```
-
 
 ## Concepts
 
 * **client endpoint:** A service run on client side, used to accept the client applications' connection request and convert the transport layer protocol from TCP/UNIX-SOCKET to QUIC.
 * **server endpoint:** A service run on server side, used to accept the data from client endpoint and forward these data to server application by TCP/UNIX-SOCKET protocol.
 * **token:** When a client endpoint receive a new connection request, the client endpoint will retrieve a token according to the request's source address and send the token to server endpoint, the server endpoint will parse and verify the token and get the server application socket address from parsed result. ``quic-tun`` provide multiple type token plugin in order to adapt different use cases.
-
+* **tunnel** ``quic-tun`` will create a tunnel for each TCP/UNIX-SOCKET connection, one tunnel corresponding with one QUIC stream.
 
 ## Token plugin
 
@@ -94,7 +92,7 @@ At client side, We address the token plugin as token source plugin, related comm
 
 Example:
 
-```
+```console
 ./quictun-client --listen-on tcp:127.0.0.1:6500 --server-endpoint 172.18.31.36:7500 --token-source-plugin Fixed --token-source tcp:172.18.30.117:22 --insecure-skip-verify True
 ```
 
@@ -104,7 +102,7 @@ Example:
 
 The file's contents like below:
 
-```
+```text
 172.26.106.191 tcp:10.20.30.5:2256
 172.26.106.192 tcp:10.20.30.6:3306
 172.26.106.193 tcp:10.20.30.6:3306
@@ -114,7 +112,7 @@ The first column are the client application's IP addresses, the second column ar
 
 Example:
 
-```
+```console
 ./quictun-client --insecure-skip-verify --server-endpoint 127.0.0.1:7500 --token-source-plugin File --token-source /etc/quictun/tokenfile --listen-on tcp:172.18.31.36:6622
 ```
 
@@ -130,12 +128,12 @@ Example:
 
 If the client endpoint token is not encoded.
 
-```
+```console
 ./quictun-server --listen-on 172.18.31.36:7500 --token-parser-plugin Cleartext
 ```
 
 If the client endpoint token is encoded by ``base64``
 
-```
+```console
 ./quictun-server --listen-on 172.18.31.36:7500 --token-parser-plugin Cleartext --token-parser-key base64
 ```

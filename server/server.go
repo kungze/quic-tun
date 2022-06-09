@@ -21,7 +21,8 @@ type ServerEndpoint struct {
 	TokenParser token.TokenParserPlugin
 }
 
-func (s *ServerEndpoint) Start() error {
+func (s *ServerEndpoint) Start() {
+	// Listen a quic(UDP) socket.
 	listener, err := quic.ListenAddr(s.Address, s.TlsConfig, nil)
 	if err != nil {
 		panic(err)
@@ -29,39 +30,46 @@ func (s *ServerEndpoint) Start() error {
 	defer listener.Close()
 	klog.InfoS("Server endpoint start up successful", "listen address", listener.Addr())
 	for {
+		// Wait client endpoint connection request.
 		sess, err := listener.Accept(context.Background())
 		if err != nil {
 			klog.ErrorS(err, "Encounter error when accept a connection.")
 		} else {
-			logger := klog.NewKlogr().WithValues("Remote-Addr", sess.RemoteAddr())
-			ctx := klog.NewContext(context.TODO(), logger)
-			logger.Info("Received a new connect request.")
-			go s.establishTunnel(ctx, &sess)
+			logger := klog.NewKlogr().WithValues(constants.ClientEndpointAddr, sess.RemoteAddr().String())
+			logger.Info("A new client endpoint connect request accepted.")
+			go func() {
+				for {
+					// Wait client endpoint open a stream (A new steam means a new tunnel)
+					stream, err := sess.AcceptStream(context.Background())
+					if err != nil {
+						logger.Error(err, "Cannot accept a new stream.")
+						break
+					}
+					logger := logger.WithValues(constants.StreamID, stream.StreamID())
+					go s.establishTunnel(logger, &stream)
+				}
+			}()
 		}
 	}
 }
 
-func (s *ServerEndpoint) establishTunnel(ctx context.Context, sess *quic.Session) {
-	logger := klog.FromContext(ctx)
+func (s *ServerEndpoint) establishTunnel(logger klog.Logger, stream *quic.Stream) {
 	logger.Info("Starting establish a new tunnel.")
-	stream, err := (*sess).AcceptStream(context.Background())
-	if err != nil {
-		logger.Error(err, "Failed to accept stream.")
-		return
-	}
 	defer func() {
-		stream.Close()
+		(*stream).Close()
 		logger.Info("Tunnel closed")
 	}()
-	conn, err := s.handshake(logger, &stream)
+	// Verify the token receive from client endpoint
+	conn, err := s.handshake(logger, stream)
 	if err != nil {
 		return
 	}
 	defer conn.Close()
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go s.serverToClient(logger, &conn, &stream, &wg)
-	go s.clientToServer(logger, &conn, &stream, &wg)
+	// Exchange packets between server application and client endpoint.
+	go s.serverToClient(logger, &conn, stream, &wg)
+	go s.clientToServer(logger, &conn, stream, &wg)
 	logger.Info("Tunnel established")
 	wg.Wait()
 }
@@ -76,11 +84,11 @@ func (s *ServerEndpoint) handshake(logger klog.Logger, stream *quic.Stream) (net
 	addr, err := s.TokenParser.ParseToken(hsh.ReceiveData)
 	if err != nil {
 		logger.Error(err, "Failed to parse token")
-		hsh.SendData = []byte{constants.ParserTokenError}
+		hsh.SendData = []byte{constants.ParseTokenError}
 		_, _ = io.Copy(*stream, &hsh)
 		return nil, err
 	}
-	logger = logger.WithValues("Server-App-Addr", addr)
+	logger = logger.WithValues(constants.ServerAppAddr, addr)
 	logger.Info("starting connect to server app")
 	sockets := strings.Split(addr, ":")
 	conn, err := net.Dial(strings.ToLower(sockets[0]), strings.Join(sockets[1:], ":"))

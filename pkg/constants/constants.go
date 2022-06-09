@@ -1,8 +1,30 @@
 package constants
 
-const TokenLength = 512
-const AckMsgLength = 1
+type contextkey string
 
-const HandshakeSuccess = 0x01
-const ParserTokenError = 0x02
-const CannotConnServer = 0x03
+const (
+	// The length of token that client endpoint send to server endpoint
+	TokenLength = 512
+	// The lenght of ack message that server endpoint send to client endpoint
+	AckMsgLength = 1
+)
+
+const (
+	// Means that server endpoint accept the token which receive from client endpoint
+	HandshakeSuccess = 0x01
+	// Means that server endpoint cannot parse token
+	ParseTokenError = 0x02
+	// Means that server endpoint cannot connect server application
+	CannotConnServer = 0x03
+)
+
+const (
+	ClientAppAddr      = "Client-App-Addr"
+	StreamID           = "Stream-ID"
+	ServerAppAddr      = "Server-App-Addr"
+	ClientEndpointAddr = "Client-Endpoint-Addr"
+)
+
+const (
+	CtxClientAppAddrKey contextkey = "Client-App-Addr"
+)

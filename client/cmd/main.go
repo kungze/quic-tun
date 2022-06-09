@@ -79,10 +79,7 @@ func main() {
 				TokenSource:          loadTokenSourcePlugin(tokenPlugin, tokenSource),
 				TlsConfig:            tlsConfig,
 			}
-			err := c.Start()
-			if err != nil {
-				klog.ErrorS(err, "Failed to start client endpoint")
-			}
+			c.Start()
 		},
 	}
 	defer klog.Flush()
