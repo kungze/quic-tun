@@ -107,10 +107,7 @@ func main() {
 				TlsConfig:   tlsConfig,
 				TokenParser: loadTokenParserPlugin(tokenParserPlugin, tokenParserKey),
 			}
-			err := s.Start()
-			if err != nil {
-				klog.ErrorS(err, "Failed to start server endpoint")
-			}
+			s.Start()
 		},
 	}
 	defer klog.Flush()
