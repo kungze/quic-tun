@@ -9,9 +9,12 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/kungze/quic-tun/pkg/constants"
 	"github.com/kungze/quic-tun/pkg/handshake"
+	"github.com/kungze/quic-tun/pkg/restfulapi"
 	"github.com/kungze/quic-tun/pkg/token"
 	"github.com/lucas-clemente/quic-go"
 	"k8s.io/klog/v2"
@@ -22,6 +25,8 @@ type ClientEndpoint struct {
 	ServerEndpointSocket string
 	TokenSource          token.TokenSourcePlugin
 	TlsConfig            *tls.Config
+	// Used to send tunnel status info to httpd(API) server
+	TunCh chan<- restfulapi.Tunnel
 }
 
 func (c *ClientEndpoint) Start() {
@@ -61,13 +66,19 @@ func (c *ClientEndpoint) Start() {
 				logger = logger.WithValues(constants.StreamID, stream.StreamID())
 				// Create a context argument for each new tunnel
 				ctx := context.WithValue(klog.NewContext(context.TODO(), logger), constants.CtxClientAppAddrKey, conn.RemoteAddr().String())
-				c.establishTunnel(ctx, &conn, &stream)
+				tunnelData := restfulapi.Tunnel{
+					Uuid:               uuid.New(),
+					StreamID:           stream.StreamID(),
+					ClientAppAddr:      conn.RemoteAddr().String(),
+					RemoteEndpointAddr: session.RemoteAddr().String(),
+				}
+				c.establishTunnel(ctx, &conn, &stream, &tunnelData)
 			}()
 		}
 	}
 }
 
-func (c *ClientEndpoint) establishTunnel(ctx context.Context, conn *net.Conn, stream *quic.Stream) {
+func (c *ClientEndpoint) establishTunnel(ctx context.Context, conn *net.Conn, stream *quic.Stream, tunnelData *restfulapi.Tunnel) {
 	logger := klog.FromContext(ctx)
 	logger.Info("Establishing a new tunnel.")
 	// Sent token to server endpoint
@@ -82,7 +93,13 @@ func (c *ClientEndpoint) establishTunnel(ctx context.Context, conn *net.Conn, st
 	go c.clientToServer(logger, conn, stream, &wg)
 	go c.serverToClient(logger, conn, stream, &wg)
 	logger.Info("Tunnel established")
+	// Notify httpd(API) server a new tunnel was created
+	tunnelData.CreatedAt = time.Now().String()
+	tunnelData.Action = constants.Creation
+	c.TunCh <- *tunnelData
 	wg.Wait()
+	tunnelData.Action = constants.Close
+	c.TunCh <- *tunnelData
 }
 
 func (c *ClientEndpoint) handshake(ctx context.Context, stream *quic.Stream) error {

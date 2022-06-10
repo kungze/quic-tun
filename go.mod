@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/google/uuid v1.3.0
 	github.com/lucas-clemente/quic-go v0.26.0
 	k8s.io/klog/v2 v2.60.1
 )
