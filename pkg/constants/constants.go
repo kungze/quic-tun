@@ -18,6 +18,7 @@ const (
 	CannotConnServer = 0x03
 )
 
+// The key name of klog's additional key/value pairs
 const (
 	ClientAppAddr      = "Client-App-Addr"
 	StreamID           = "Stream-ID"
@@ -25,6 +26,13 @@ const (
 	ClientEndpointAddr = "Client-Endpoint-Addr"
 )
 
+// The value key names of value context
 const (
 	CtxClientAppAddrKey contextkey = "Client-App-Addr"
+)
+
+// The actions about tunnel data (which used to determine how to update tunnel data store in api server)
+const (
+	Creation = "creation"
+	Close    = "close"
 )

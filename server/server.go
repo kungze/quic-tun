@@ -7,9 +7,12 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/kungze/quic-tun/pkg/constants"
 	"github.com/kungze/quic-tun/pkg/handshake"
+	"github.com/kungze/quic-tun/pkg/restfulapi"
 	"github.com/kungze/quic-tun/pkg/token"
 	quic "github.com/lucas-clemente/quic-go"
 	"k8s.io/klog/v2"
@@ -19,6 +22,8 @@ type ServerEndpoint struct {
 	Address     string
 	TlsConfig   *tls.Config
 	TokenParser token.TokenParserPlugin
+	// Used to send tunnel status info to httpd(API) server
+	TunCh chan<- restfulapi.Tunnel
 }
 
 func (s *ServerEndpoint) Start() {
@@ -31,29 +36,34 @@ func (s *ServerEndpoint) Start() {
 	klog.InfoS("Server endpoint start up successful", "listen address", listener.Addr())
 	for {
 		// Wait client endpoint connection request.
-		sess, err := listener.Accept(context.Background())
+		session, err := listener.Accept(context.Background())
 		if err != nil {
 			klog.ErrorS(err, "Encounter error when accept a connection.")
 		} else {
-			logger := klog.NewKlogr().WithValues(constants.ClientEndpointAddr, sess.RemoteAddr().String())
+			logger := klog.NewKlogr().WithValues(constants.ClientEndpointAddr, session.RemoteAddr().String())
 			logger.Info("A new client endpoint connect request accepted.")
 			go func() {
 				for {
 					// Wait client endpoint open a stream (A new steam means a new tunnel)
-					stream, err := sess.AcceptStream(context.Background())
+					stream, err := session.AcceptStream(context.Background())
 					if err != nil {
 						logger.Error(err, "Cannot accept a new stream.")
 						break
 					}
 					logger := logger.WithValues(constants.StreamID, stream.StreamID())
-					go s.establishTunnel(logger, &stream)
+					tunnelData := restfulapi.Tunnel{
+						Uuid:               uuid.New(),
+						StreamID:           stream.StreamID(),
+						RemoteEndpointAddr: session.RemoteAddr().String(),
+					}
+					go s.establishTunnel(logger, &stream, &tunnelData)
 				}
 			}()
 		}
 	}
 }
 
-func (s *ServerEndpoint) establishTunnel(logger klog.Logger, stream *quic.Stream) {
+func (s *ServerEndpoint) establishTunnel(logger klog.Logger, stream *quic.Stream, tunnelData *restfulapi.Tunnel) {
 	logger.Info("Starting establish a new tunnel.")
 	defer func() {
 		(*stream).Close()
@@ -71,7 +81,14 @@ func (s *ServerEndpoint) establishTunnel(logger klog.Logger, stream *quic.Stream
 	go s.serverToClient(logger, &conn, stream, &wg)
 	go s.clientToServer(logger, &conn, stream, &wg)
 	logger.Info("Tunnel established")
+	// Notify httpd(API) server a new tunnel was created
+	tunnelData.ServerAppAddr = conn.RemoteAddr().String()
+	tunnelData.CreatedAt = time.Now().String()
+	tunnelData.Action = constants.Creation
+	s.TunCh <- *tunnelData
 	wg.Wait()
+	tunnelData.Action = constants.Close
+	s.TunCh <- *tunnelData
 }
 
 func (s *ServerEndpoint) handshake(logger klog.Logger, stream *quic.Stream) (net.Conn, error) {

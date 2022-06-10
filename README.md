@@ -137,3 +137,31 @@ If the client endpoint token is encoded by ``base64``
 ```console
 ./quictun-server --listen-on 172.18.31.36:7500 --token-parser-plugin Cleartext --token-parser-key base64
 ```
+
+## Restful API
+
+``quic-tun`` also provide some restful API. By these APIs, you can query the information of the tunnels which are active.
+You can set address of the API server listen on by ``--httpd-listen-on`` when you start server/client endpoint server, like below:
+
+```console
+./quictun-server --httpd-listen-on 127.0.0.1:18086
+```
+
+Then you can use ``curl`` command to query all active tunnels, like below:
+
+```console
+$ curl http://127.0.0.1:18086/tunnels | jq .
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   227  100   227    0     0   221k      0 --:--:-- --:--:-- --:--:--  221k
+[
+  {
+    "uuid": "f2b7b73e-a67a-49e3-8972-59dca7cc8a0c",
+    "streamId": 0,
+    "clientAppAddr": "",
+    "serverAppAddr": "172.18.30.96:22",
+    "remoteEndpointAddr": "172.18.29.161:36244",
+    "createdAt": "2022-06-13 14:25:26.228324951 +0800 CST m=+8.552559042"
+  }
+]
+```

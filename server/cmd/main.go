@@ -15,6 +15,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/kungze/quic-tun/pkg/restfulapi"
 	"github.com/kungze/quic-tun/pkg/token"
 	"github.com/kungze/quic-tun/server"
 	"github.com/spf13/cobra"
@@ -29,6 +30,7 @@ var (
 	verifyClient      bool
 	tokenParserPlugin string
 	tokenParserKey    string
+	apiListenOn       string
 )
 
 // Setup a bare-bones TLS config for the server
@@ -102,10 +104,16 @@ func main() {
 				}
 			}
 
+			// Start API server
+			httpd, ch := restfulapi.NewHttpd(apiListenOn)
+			go httpd.Start()
+
+			// Start server endpoint
 			s := &server.ServerEndpoint{
 				Address:     listenSocket,
 				TlsConfig:   tlsConfig,
 				TokenParser: loadTokenParserPlugin(tokenParserPlugin, tokenParserKey),
+				TunCh:       ch,
 			}
 			s.Start()
 		},
@@ -120,6 +128,7 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(
 		&caFile, "ca-file", "",
 		"The certificate authority file path, used to verify client endpoint certificate. If not specified, quictun try to load system certificate.")
+	rootCmd.PersistentFlags().StringVar(&apiListenOn, "httpd-listen-on", "0.0.0.0:8086", "The socket of the API(httpd) server listen on.")
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
