@@ -6,15 +6,11 @@ import (
 	"io"
 	"net"
 	"strings"
-	"sync"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/kungze/quic-tun/pkg/constants"
-	"github.com/kungze/quic-tun/pkg/handshake"
-	"github.com/kungze/quic-tun/pkg/restfulapi"
 	"github.com/kungze/quic-tun/pkg/token"
-	quic "github.com/lucas-clemente/quic-go"
+	"github.com/kungze/quic-tun/pkg/tunnel"
+	"github.com/lucas-clemente/quic-go"
 	"k8s.io/klog/v2"
 )
 
@@ -22,8 +18,6 @@ type ServerEndpoint struct {
 	Address     string
 	TlsConfig   *tls.Config
 	TokenParser token.TokenParserPlugin
-	// Used to send tunnel status info to httpd(API) server
-	TunCh chan<- restfulapi.Tunnel
 }
 
 func (s *ServerEndpoint) Start() {
@@ -40,6 +34,7 @@ func (s *ServerEndpoint) Start() {
 		if err != nil {
 			klog.ErrorS(err, "Encounter error when accept a connection.")
 		} else {
+			parent_ctx := context.WithValue(context.TODO(), constants.CtxRemoteEndpointAddr, session.RemoteAddr().String())
 			logger := klog.NewKlogr().WithValues(constants.ClientEndpointAddr, session.RemoteAddr().String())
 			logger.Info("A new client endpoint connect request accepted.")
 			go func() {
@@ -51,59 +46,37 @@ func (s *ServerEndpoint) Start() {
 						break
 					}
 					logger := logger.WithValues(constants.StreamID, stream.StreamID())
-					tunnelData := restfulapi.Tunnel{
-						Uuid:               uuid.New(),
-						StreamID:           stream.StreamID(),
-						RemoteEndpointAddr: session.RemoteAddr().String(),
+					ctx := klog.NewContext(parent_ctx, logger)
+					hsh := tunnel.NewHandshakeHelper(constants.AckMsgLength, handshake)
+					hsh.TokenParser = &s.TokenParser
+
+					tun := tunnel.NewTunnel(&stream, constants.ServerEndpoint)
+					tun.Hsh = &hsh
+					if !tun.HandShake(ctx) {
+						continue
 					}
-					go s.establishTunnel(logger, &stream, &tunnelData)
+					// After handshake successful the server application's address is established we can add it to log
+					ctx = klog.NewContext(ctx, logger.WithValues(constants.ServerAppAddr, (*tun.Conn).RemoteAddr().String()))
+					go tun.Establish(ctx)
 				}
 			}()
 		}
 	}
 }
 
-func (s *ServerEndpoint) establishTunnel(logger klog.Logger, stream *quic.Stream, tunnelData *restfulapi.Tunnel) {
-	logger.Info("Starting establish a new tunnel.")
-	defer func() {
-		(*stream).Close()
-		logger.Info("Tunnel closed")
-	}()
-	// Verify the token receive from client endpoint
-	conn, err := s.handshake(logger, stream)
-	if err != nil {
-		return
-	}
-	defer conn.Close()
-	var wg sync.WaitGroup
-	wg.Add(2)
-	// Exchange packets between server application and client endpoint.
-	go s.serverToClient(logger, &conn, stream, &wg)
-	go s.clientToServer(logger, &conn, stream, &wg)
-	logger.Info("Tunnel established")
-	// Notify httpd(API) server a new tunnel was created
-	tunnelData.ServerAppAddr = conn.RemoteAddr().String()
-	tunnelData.CreatedAt = time.Now().String()
-	tunnelData.Action = constants.Creation
-	s.TunCh <- *tunnelData
-	wg.Wait()
-	tunnelData.Action = constants.Close
-	s.TunCh <- *tunnelData
-}
-
-func (s *ServerEndpoint) handshake(logger klog.Logger, stream *quic.Stream) (net.Conn, error) {
-	logger.Info("Starting handshake")
-	hsh := handshake.NewHandshakeHelper([]byte{constants.HandshakeSuccess}, constants.AckMsgLength)
-	if _, err := io.CopyN(&hsh, *stream, constants.TokenLength); err != nil {
+func handshake(ctx context.Context, stream *quic.Stream, hsh *tunnel.HandshakeHelper) (bool, *net.Conn) {
+	logger := klog.FromContext(ctx)
+	logger.Info("Starting handshake with client endpoint")
+	if _, err := io.CopyN(hsh, *stream, constants.TokenLength); err != nil {
 		logger.Error(err, "Can not receive token")
-		return nil, err
+		return false, nil
 	}
-	addr, err := s.TokenParser.ParseToken(hsh.ReceiveData)
+	addr, err := (*hsh.TokenParser).ParseToken(hsh.ReceiveData)
 	if err != nil {
 		logger.Error(err, "Failed to parse token")
-		hsh.SendData = []byte{constants.ParseTokenError}
-		_, _ = io.Copy(*stream, &hsh)
-		return nil, err
+		hsh.SetSendData([]byte{constants.ParseTokenError})
+		_, _ = io.Copy(*stream, hsh)
+		return false, nil
 	}
 	logger = logger.WithValues(constants.ServerAppAddr, addr)
 	logger.Info("starting connect to server app")
@@ -111,39 +84,16 @@ func (s *ServerEndpoint) handshake(logger klog.Logger, stream *quic.Stream) (net
 	conn, err := net.Dial(strings.ToLower(sockets[0]), strings.Join(sockets[1:], ":"))
 	if err != nil {
 		logger.Error(err, "Failed to dial server app")
-		hsh.SendData = []byte{constants.CannotConnServer}
-		_, _ = io.Copy(*stream, &hsh)
-		return nil, err
+		hsh.SetSendData([]byte{constants.CannotConnServer})
+		_, _ = io.Copy(*stream, hsh)
+		return false, nil
 	}
 	logger.Info("Server app connect successful")
-	if _, err = io.CopyN(*stream, &hsh, constants.AckMsgLength); err != nil {
+	hsh.SetSendData([]byte{constants.HandshakeSuccess})
+	if _, err = io.CopyN(*stream, hsh, constants.AckMsgLength); err != nil {
 		logger.Error(err, "Faied to send ack info", hsh.SendData)
-		return nil, err
+		return false, nil
 	}
 	logger.Info("Handshake successful")
-	return conn, nil
-}
-
-func (s *ServerEndpoint) clientToServer(logger klog.Logger, server *net.Conn, client *quic.Stream, wg *sync.WaitGroup) {
-	defer func() {
-		wg.Done()
-		(*client).Close()
-		(*server).Close()
-	}()
-	_, err := io.Copy(*server, *client)
-	if err != nil {
-		logger.Error(err, "Can not forward packet from client to server")
-	}
-}
-
-func (s *ServerEndpoint) serverToClient(logger klog.Logger, server *net.Conn, client *quic.Stream, wg *sync.WaitGroup) {
-	defer func() {
-		wg.Done()
-		(*client).Close()
-		(*server).Close()
-	}()
-	_, err := io.Copy(*client, *server)
-	if err != nil {
-		logger.Error(err, "Can not forward packet from server to client")
-	}
+	return true, &conn
 }

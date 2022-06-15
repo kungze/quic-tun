@@ -1,6 +1,7 @@
 package constants
 
-type contextkey string
+// context suggest that should not use built-in type key for value; define your own type to avoid collisions
+type keytype string
 
 const (
 	// The length of token that client endpoint send to server endpoint
@@ -18,7 +19,7 @@ const (
 	CannotConnServer = 0x03
 )
 
-// The key name of klog's additional key/value pairs
+// The key names of klog's additional key/value pairs
 const (
 	ClientAppAddr      = "Client-App-Addr"
 	StreamID           = "Stream-ID"
@@ -26,13 +27,13 @@ const (
 	ClientEndpointAddr = "Client-Endpoint-Addr"
 )
 
-// The value key names of value context
+// The key names of value context
 const (
-	CtxClientAppAddrKey contextkey = "Client-App-Addr"
+	CtxRemoteEndpointAddr keytype = "Remote-Endpoint-Addr"
+	CtxClientAppAddr      keytype = "Client-App-Addr"
 )
 
-// The actions about tunnel data (which used to determine how to update tunnel data store in api server)
 const (
-	Creation = "creation"
-	Close    = "close"
+	ClientEndpoint = "client"
+	ServerEndpoint = "server"
 )

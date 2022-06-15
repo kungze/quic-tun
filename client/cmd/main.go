@@ -76,7 +76,7 @@ func main() {
 			}
 
 			// Start API server
-			httpd, ch := restfulapi.NewHttpd(apiListenOn)
+			httpd := restfulapi.NewHttpd(apiListenOn)
 			go httpd.Start()
 
 			// Start client endpoint
@@ -85,7 +85,6 @@ func main() {
 				ServerEndpointSocket: serverEndpointSocket,
 				TokenSource:          loadTokenSourcePlugin(tokenPlugin, tokenSource),
 				TlsConfig:            tlsConfig,
-				TunCh:                ch,
 			}
 			c.Start()
 		},
