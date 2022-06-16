@@ -162,12 +162,127 @@ $ curl http://127.0.0.1:18086/tunnels | jq .
 100   227  100   227    0     0   221k      0 --:--:-- --:--:-- --:--:--  221k
 [
   {
-    "uuid": "f2b7b73e-a67a-49e3-8972-59dca7cc8a0c",
+    "uuid": "2e1ce596-8357-4a46-aef1-0c4871b893cd",
+    "streamId": 4,
+    "endpoint": "server",
+    "serverAppAddr": "172.18.31.97:22",
+    "remoteEndpointAddr": "172.18.29.161:46706",
+    "createdAt": "2022-06-21 11:44:05.074778434 +0800 CST m=+86.092908233",
+    "protocol": "",
+    "protocolProperties": null
+  }
+]
+```
+
+Additionally, we implement a [Spice protocol](https://www.spice-space.org/spice-protocol.html) discriminator,
+it can extract more properties about spice from the traffic pass through the tunnel. So, for spice application,
+call the query API, you can get the below response:
+
+```console
+# curl http://172.18.29.161:18086/tunnels | jq .
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  5137    0  5137    0     0  2508k      0 --:--:-- --:--:-- --:--:-- 5016k
+[
+  {
+    "uuid": "9eb73491-ef38-463d-85c3-d4512152d224",
     "streamId": 0,
-    "clientAppAddr": "",
-    "serverAppAddr": "172.18.30.96:22",
-    "remoteEndpointAddr": "172.18.29.161:36244",
-    "createdAt": "2022-06-13 14:25:26.228324951 +0800 CST m=+8.552559042"
+    "endpoint": "server",
+    "serverAppAddr": "172.18.11.2:5915",
+    "remoteEndpointAddr": "172.18.29.161:56465",
+    "createdAt": "2022-06-21 11:41:28.85774404 +0800 CST m=+47.535828999",
+    "protocol": "spice",
+    "protocolProperties": {
+      "version": "2.2",
+      "sessionId": "d0306d75",
+      "channelType": "main",
+      "serverName": "instance-e548a827-8937-4047-a756-e56937017128",
+      "serverUUID": "e548a827-8937-4047-a756-e56937017128"
+    }
+  },
+  {
+    "uuid": "66bad84d-318c-4e14-b3be-a5cb796e7f61",
+    "streamId": 44,
+    "endpoint": "server",
+    "serverAppAddr": "172.18.11.2:5915",
+    "remoteEndpointAddr": "172.18.29.161:56465",
+    "createdAt": "2022-06-21 11:41:28.937090895 +0800 CST m=+47.615175866",
+    "protocol": "spice",
+    "protocolProperties": {
+      "version": "2.2",
+      "sessionId": "d0306d75",
+      "channelType": "record"
+    }
+  },
+  {
+    "uuid": "ff93728e-38fb-435c-8728-3ece51077b95",
+    "streamId": 56,
+    "endpoint": "server",
+    "serverAppAddr": "172.18.11.2:5915",
+    "remoteEndpointAddr": "172.18.29.161:56465",
+    "createdAt": "2022-06-21 11:41:29.224234488 +0800 CST m=+47.902319441",
+    "protocol": "spice",
+    "protocolProperties": {
+      "version": "2.2",
+      "sessionId": "d0306d75",
+      "channelType": "inputs"
+    }
+  },
+  {
+    "uuid": "fbfd963c-e6b9-4c13-bfec-8965b1c56851",
+    "streamId": 12,
+    "endpoint": "server",
+    "serverAppAddr": "172.18.11.2:5915",
+    "remoteEndpointAddr": "172.18.29.161:56465",
+    "createdAt": "2022-06-21 11:41:28.93269002 +0800 CST m=+47.610774997",
+    "protocol": "spice",
+    "protocolProperties": {
+      "version": "2.2",
+      "sessionId": "d0306d75",
+      "channelType": "usbredir"
+    }
+  },
+  {
+    "uuid": "62fa355c-9c0d-4dbb-9e84-2b0c354cf8cc",
+    "streamId": 48,
+    "endpoint": "server",
+    "serverAppAddr": "172.18.11.2:5915",
+    "remoteEndpointAddr": "172.18.29.161:56465",
+    "createdAt": "2022-06-21 11:41:28.937563866 +0800 CST m=+47.615648836",
+    "protocol": "spice",
+    "protocolProperties": {
+      "version": "2.2",
+      "sessionId": "d0306d75",
+      "channelType": "display"
+    }
+  },
+  {
+    "uuid": "ce2e0bef-0ccb-4325-ab65-a6d3783c47ae",
+    "streamId": 52,
+    "endpoint": "server",
+    "serverAppAddr": "172.18.11.2:5915",
+    "remoteEndpointAddr": "172.18.29.161:56465",
+    "createdAt": "2022-06-21 11:41:29.223947759 +0800 CST m=+47.902032695",
+    "protocol": "spice",
+    "protocolProperties": {
+      "version": "2.2",
+      "sessionId": "d0306d75",
+      "channelType": "cursor"
+    }
+  },
+  {
+    "uuid": "c5169c4a-ab69-406b-b36a-68c0ab7d9d7f",
+    "streamId": 40,
+    "endpoint": "server",
+    "serverAppAddr": "172.18.11.2:5915",
+    "remoteEndpointAddr": "172.18.29.161:56465",
+    "createdAt": "2022-06-21 11:41:28.936673702 +0800 CST m=+47.614758657",
+    "protocol": "spice",
+    "protocolProperties": {
+      "version": "2.2",
+      "sessionId": "d0306d75",
+      "channelType": "playback"
+    }
   }
 ]
 ```
