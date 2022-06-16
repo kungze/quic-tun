@@ -1,6 +1,8 @@
 package tunnel
 
-import "sync"
+import (
+	"sync"
+)
 
 type tunnelDataStore struct {
 	sync.Map
