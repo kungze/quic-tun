@@ -19,6 +19,12 @@ translate back to TCP/UNIX protocol at client side. The schematic diagram like b
 
 <img src="quic-tun.png" alt="quic-tun"/>
 
+### Performance
+
+We wrote a [test report](docs/test-report/) about the difference of performance between transport
+packets by TCP directly and transport packets by `quic-tun`. If you want to know more informations,
+please consult it.
+
 ### Concerned issues
 
 If you are hesitating whether or not to study this document deeply or to play

@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+
+import socket
+import time
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--server-host', required=True,
+                    help='The server address to connect to')
+parser.add_argument('--server-port', required=False,
+                    help='The server port to connect to (default: 15676)')
+parser.add_argument('--size', required=False,
+                    help='The size of packet send to server (default: 1000).')
+parser.add_argument('--number', required=False,
+                    help='The number of the packets send to server (default: 1000).')
+args = parser.parse_args()
+
+if not args.server_port:
+    args.server_port = '15676'
+if not args.size:
+    args.size = '1000'
+if not args.number:
+    args.number = '1000'
+
+s = socket.socket()
+s.connect((args.server_host, int(args.server_port)))
+size = int(args.size)
+number = int(args.number)
+first = time.time()
+s.send(bytearray("a" * size, 'utf-8'))
+s.recv(size)
+start = time.time()
+for i in range(0, number-1):
+    s.send(bytearray("a" * size, 'utf-8'))
+    s.recv(size)
+end = time.time()
+print(f"First packet latency: {(start-first)*1000} ms")
+print(f"Total latency: {(end-first)*1000} ms")
+s.close()

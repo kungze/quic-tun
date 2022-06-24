@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+
+import socket
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--host', required=False,
+                    help='Server host to listen on (default: 0.0.0.0).')
+parser.add_argument('--port', required=False,
+                    help='Server port to listen on (default: 15676).')
+parser.add_argument('--buffer-size', required=False,
+                    help="The size of the buffer which used to receive client's data (default: 1000).")
+args = parser.parse_args()
+
+if not args.host:
+    args.host = '0.0.0.0'
+if not args.port:
+    args.port = '15676'
+if not args.buffer_size:
+    args.buffer_size = '1000'
+
+buffer_size = int(args.buffer_size)
+s = socket.socket()
+s.bind((args.host, int(args.port)))
+s.listen()
+print(f"The server listen on {args.host}:{args.port}")
+while True:
+    client, addr = s.accept()
+    print(f"Accent client {addr} connection")
+    while True:
+        try:
+            res = client.recv(buffer_size)
+            if not res:
+                client.close()
+                print(f"Client {addr} closed")
+                break
+            client.send(res)
+        except BrokenPipeError:
+            client.close()
+            print(f"Client {addr} closed")
+            break
+        except ConnectionResetError:
+            client.close()
+            print(f"Client {addr} closed")
+            break
