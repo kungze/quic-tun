@@ -5,7 +5,7 @@ before:
     # You may remove this if you don't use go modules.
     - go mod tidy
 builds:
-  - main: ./client/cmd
+  - main: ./cmd/quictun-client
     id: client
     binary: quictun-client
     goos:
@@ -14,7 +14,7 @@ builds:
     goarch:
       - amd64
       - arm64
-  - main: ./server/cmd
+  - main: ./cmd/quictun-server
     id: server
     binary: quictun-server
     goos:
