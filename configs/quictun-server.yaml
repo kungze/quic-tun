@@ -1,0 +1,26 @@
+# quic-tun-server config
+
+server:
+    bind-address: ${QUIC_TUN_SERVER_BIND_ADDRESS} # Set to 0.0.0.0 to use all network interfaces, Default to 127.0.0.1
+    bind-port: ${QUIC_TUN_SERVER_BIND_PORT} # Default to 7500
+    token-parser-plugin: ${QUIC_TUN_SERVER_TOKEN_PARSER_PLUGIN} # Default to Cleartext
+    token-parser-key: ${QUIC_TUN_SERVER_TOKEN_PARSER_KEY} # Default to ""
+    cert-file: ${QUIC_TUN_SERVER_SECURE_TLS_CERT_KEY_CERT_FILE} # x509 certificate. Default to ""
+    key-file: ${QUIC_TUN_SERVER_SECURE_TLS_CERT_KEY_PRIVATE_KEY_FILE} # TLS private key. Default to ""
+    verify-client: ${QUIC_TUN_SERVER_VERIFY_CLIENT} # Default to false
+    ca-file: ${QUIC_TUN_SERVER_CA_FILE} # Default to ""
+
+restfulapi:
+    api-listen-address: ${QUIC_TUN_API_LISTEN_ADDRESS} # Default to 0.0.0.0
+    api-listen-port: ${QUIC_TUN_API_LISTEN_PORT} # Default to 8086
+
+log:
+    name: quictun-client # Logger's name
+    development: true # Is it in development mode. If it is in development mode, it will DPanicLevel for stack traces.
+    level: debug # Log level, the priority from low to high is：debug, info, warn, error, dpanic, panic, fatal。
+    format: console # The supported log output formats currently support console and json. console is actually text format.
+    enable-color: false # Whether to enable color output, true: yes, false: no
+    disable-caller: false # Whether to enable caller, if enabled, the file, function and line number where the call log is located will be displayed in the log
+    disable-stacktrace: false # Whether to disable printing stack information at panic and above levels
+    output-paths: ${QUIC_TUN_LOG_DIR}/quictun-server.log,stdout # Supports output to multiple outputs, separated by commas. Supports output to standard output (stdout) and files.
+    error-output-paths: ${QUIC_TUN_LOG_DIR}/quictun-server.error.log # Zap internal (non business) error log output path, multiple outputs, separated by commas

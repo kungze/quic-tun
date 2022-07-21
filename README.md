@@ -61,16 +61,16 @@ tar xvfz quic-tun_0.0.1_linux_amd64.tar.gz
 Start up server side endpoint
 
 ```console
-./quictun-server --listen-on 172.18.31.36:7500
+./quictun-server --server.bind-address 172.18.31.36 --server.bind-port 7500
 ```
 
 Start up client side endpoint
 
 ```console
-./quictun-client --listen-on tcp:127.0.0.1:6500 --server-endpoint 172.18.31.36:7500 --token-source tcp:172.18.30.117:22 --insecure-skip-verify True
+./quictun-client --client.bind-protocol tcp --client.bind-address 127.0.0.1 --client.bind-port 6500 --client.server-endpoint 172.18.31.36:7500 --client.token-source tcp:172.18.30.117:22
 ```
 
-**Note:** The value specified by `--token-source` used to tell `quictun-server` the application address that the client want to access.
+**Note:** The value specified by `--client.token-source` used to tell `quictun-server` the application address that the client want to access.
 
 Use `ssh` command to test
 
@@ -90,7 +90,7 @@ root@127.0.0.1's password:
 
 ### quictun-client
 
-At client side, We address the token plugin as token source plugin, related command options ``--token-source-plugin``, ``--token-source``. Currently, ``quic-tun`` provide two type token source plugin: ``Fixed`` and ``File``.
+At client side, We address the token plugin as token source plugin, related command options ``--client.token-source-plugin``, ``--client.token-source``. Currently, ``quic-tun`` provide two type token source plugin: ``Fixed`` and ``File``.
 
 #### Fixed
 
@@ -99,12 +99,12 @@ At client side, We address the token plugin as token source plugin, related comm
 Example:
 
 ```console
-./quictun-client --listen-on tcp:127.0.0.1:6500 --server-endpoint 172.18.31.36:7500 --token-source-plugin Fixed --token-source tcp:172.18.30.117:22 --insecure-skip-verify True
+./quictun-client  --client.bind-protocol tcp --client.bind-address 127.0.0.1 --client.bind-port 6500 --client.server-endpoint 172.18.31.36:7500 --client.token-source-plugin Fixed --client.token-source tcp:172.18.30.117:22 
 ```
 
 ### File
 
-``File`` token source plugin will read token from a file and return different token according to the client application's source address. The file path specified by ``--token-source``.
+``File`` token source plugin will read token from a file and return different token according to the client application's source address. The file path specified by ``--client.token-source``.
 
 The file's contents like below:
 
@@ -119,12 +119,12 @@ The first column are the client application's IP addresses, the second column ar
 Example:
 
 ```console
-./quictun-client --insecure-skip-verify --server-endpoint 127.0.0.1:7500 --token-source-plugin File --token-source /etc/quictun/tokenfile --listen-on tcp:172.18.31.36:6622
+./quictun-client --client.server-endpoint 127.0.0.1:7500 --client.token-source-plugin File --client.token-source /etc/quictun/tokenfile --client.bind-protocol tcp --client.bind-address 172.18.31.36 --client.bind-port 6622
 ```
 
 ### quictun-server
 
-At server side, we address the token plugin as token parser plugin, it used to parse and verify the token and get the server application socket address from the parse result, related command option ``--token-parser-plugin``, ``--token-parser-key``. Currently, ``quic-tun`` just provide one token parser plugin: ``Cleartext``.
+At server side, we address the token plugin as token parser plugin, it used to parse and verify the token and get the server application socket address from the parse result, related command option ``--server.token-parser-plugin``, ``--server.token-parser-key``. Currently, ``quic-tun`` just provide one token parser plugin: ``Cleartext``.
 
 #### Cleartext
 
@@ -135,22 +135,22 @@ Example:
 If the client endpoint token is not encoded.
 
 ```console
-./quictun-server --listen-on 172.18.31.36:7500 --token-parser-plugin Cleartext
+./quictun-server --server.bind-address 172.18.31.36 --server.bind-port 7500 --token-parser-plugin Cleartext
 ```
 
 If the client endpoint token is encoded by ``base64``
 
 ```console
-./quictun-server --listen-on 172.18.31.36:7500 --token-parser-plugin Cleartext --token-parser-key base64
+./quictun-server --server.bind-address 172.18.31.36 --server.bind-port 7500 --token-parser-plugin Cleartext --token-parser-key base64
 ```
 
 ## Restful API
 
 ``quic-tun`` also provide some restful API. By these APIs, you can query the information of the tunnels which are active.
-You can set address of the API server listen on by ``--httpd-listen-on`` when you start server/client endpoint server, like below:
+You can set address of the API server listen on by ``--restfulapi.api-listen-address`` and ``--restfulapi.api-listen-port`` when you start server/client endpoint server, like below:
 
 ```console
-./quictun-server --httpd-listen-on 127.0.0.1:18086
+./quictun-server --restfulapi.api-listen-address 127.0.0.1 --restfulapi.api-listen-port 18086
 ```
 
 Then you can use ``curl`` command to query all active tunnels, like below:
