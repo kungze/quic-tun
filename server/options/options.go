@@ -11,8 +11,8 @@ import (
 
 // Options runs an quic-tun server.
 type Options struct {
-	ServerOptions     *options.ServerOptions     `json:"server"`
-	RestfulAPIOptions *options.RestfulAPIOptions `json:"restfulapi"`
+	ServerOptions     *options.ServerOptions     `json:"server"     mapstructure:"server"`
+	RestfulAPIOptions *options.RestfulAPIOptions `json:"restfulapi" mapstructure:"restfulapi"`
 }
 
 // NewOptions creates a new Options object with default parameters.

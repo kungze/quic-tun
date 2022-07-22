@@ -10,14 +10,14 @@ import (
 
 // ServerOptions contains the options while running a quic-tun server.
 type ServerOptions struct {
-	BindAddress       string `json:"bind-address"`
-	BindPort          int    `json:"bind-port"`
-	KeyFile           string `json:"key-file"`
-	CertFile          string `json:"cert-file"`
-	CaFile            string `json:"ca-file"`
-	VerifyClient      bool   `json:"verify-client"`
-	TokenParserPlugin string `json:"token-parse-plugin"`
-	TokenParserKey    string `json:"token-parse-key"`
+	BindAddress       string `json:"bind-address"       mapstructure:"bind-address"`
+	BindPort          int    `json:"bind-port"          mapstructure:"bind-port"`
+	KeyFile           string `json:"key-file"           mapstructure:"key-file"`
+	CertFile          string `json:"cert-file"          mapstructure:"cert-file"`
+	CaFile            string `json:"ca-file"            mapstructure:"ca-file"`
+	VerifyClient      bool   `json:"verify-client"      mapstructure:"verify-client"`
+	TokenParserPlugin string `json:"token-parse-plugin" mapstructure:"token-parse-plugin"`
+	TokenParserKey    string `json:"token-parse-key"    mapstructure:"token-parse-key"`
 }
 
 // Validate checks validation of ServerOptions.

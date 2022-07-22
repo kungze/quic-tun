@@ -7,6 +7,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	log "k8s.io/klog/v2"
 )
 
@@ -35,6 +36,7 @@ type App struct {
 	options     CliOptions
 	runFunc     RunFunc
 	silence     bool
+	noConfig    bool
 	commands    []*Command
 	args        cobra.PositionalArgs
 	cmd         *cobra.Command
@@ -122,7 +124,9 @@ func (a *App) buildCommand() {
 			fs.AddFlagSet(f)
 		}
 	}
-
+	if !a.noConfig {
+		addConfigFlag(a.basename, namedFlagSets.FlagSet("global"))
+	}
 	AddGlobalFlags(namedFlagSets.FlagSet("global"), cmd.Name())
 	// add new global flagset to cmd FlagSet
 	cmd.Flags().AddFlagSet(namedFlagSets.FlagSet("global"))
@@ -143,8 +147,21 @@ func (a *App) runCommand(cmd *cobra.Command, args []string) error {
 	printWorkingDir()
 	PrintFlags(cmd.Flags())
 
+	if !a.noConfig {
+		if err := viper.BindPFlags(cmd.Flags()); err != nil {
+			return err
+		}
+
+		if err := viper.Unmarshal(a.options); err != nil {
+			return err
+		}
+	}
+
 	if !a.silence {
 		log.Infof("%v Starting %s ...", progressMessage, a.name)
+		if !a.noConfig {
+			log.Infof("%v Config file used: `%s`", progressMessage, viper.ConfigFileUsed())
+		}
 	}
 	if a.options != nil {
 		if err := a.applyOptionRules(); err != nil {

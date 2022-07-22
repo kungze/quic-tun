@@ -10,16 +10,16 @@ import (
 
 // ClientOptions contains the options while running a quic-tun client.
 type ClientOptions struct {
-	BindProtocol         string `json:"bind-protocol"`
-	BindAddress          string `json:"bind-address"`
-	BindPort             int    `json:"bind-port"`
-	ServerEndpointSocket string `json:"server-endpoint"`
-	TokenPlugin          string `json:"token-source-plugin"`
-	TokenSource          string `json:"token-source"`
-	CertFile             string `json:"cert-file"`
-	KeyFile              string `json:"key-file"`
-	VerifyServer         bool   `json:"verify-server"`
-	CaFile               string `json:"ca-file"`
+	BindProtocol         string `json:"bind-protocol"        mapstructure:"bind-protocol"`
+	BindAddress          string `json:"bind-address"         mapstructure:"bind-address"`
+	BindPort             int    `json:"bind-port"            mapstructure:"bind-port"`
+	ServerEndpointSocket string `json:"server-endpoint"      mapstructure:"server-endpoint"`
+	TokenPlugin          string `json:"token-source-plugin"  mapstructure:"token-source-plugin"`
+	TokenSource          string `json:"token-source"         mapstructure:"token-source"`
+	CertFile             string `json:"cert-file"            mapstructure:"cert-file"`
+	KeyFile              string `json:"key-file"             mapstructure:"key-file"`
+	VerifyServer         bool   `json:"verify-server"        mapstructure:"verify-server"`
+	CaFile               string `json:"ca-file"              mapstructure:"ca-file"`
 }
 
 // Validate checks validation of ClientOptions.

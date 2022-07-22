@@ -10,8 +10,8 @@ import (
 
 // RestfulAPIOptions contains the options while running a API server.
 type RestfulAPIOptions struct {
-	APIListenAddress string `json:"api-listen-address"`
-	APIListenPort    int    `json:"api-listen-port"`
+	APIListenAddress string `json:"api-listen-address" mapstructure:"api-listen-address"`
+	APIListenPort    int    `json:"api-listen-port"    mapstructure:"api-listen-port"`
 }
 
 // Validate checks validation of RestfulAPIOptions.
