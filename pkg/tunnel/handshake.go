@@ -15,8 +15,8 @@ type HandshakeHelper struct {
 	// The function used to process handshake, the handshake processes
 	// are different between server endpoint and client endpoint.
 	Handshakefunc handshakefunc `json:"-"`
-	TokenSource   *token.TokenSourcePlugin
 	TokenParser   *token.TokenParserPlugin
+	TokenSource   *token.TokenSourcePlugin
 	// The data will send to remote endpoint. In client
 	// endpoit, this means 'token'; In server endpoint,
 	// this means ack message.
