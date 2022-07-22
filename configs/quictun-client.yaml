@@ -1,0 +1,18 @@
+# quic-tun-client config
+
+client:
+    bind-protocol: ${QUIC_TUN_CLIENT_BIND_PROTOCOL} # Listen on a TCP or UNIX socket. Default to tcp
+    bind-address: ${QUIC_TUN_CLIENT_BIND_ADDRESS} # Set to 0.0.0.0 to use all network interfaces, Default to 127.0.0.1
+    bind-port: ${QUIC_TUN_CLIENT_BIND_PORT} # Default to 6500
+    server-endpoint: ${QUIC_TUN_SERVER_ADDRESS} # The address to connect to the QUIC-TUN server. eg: 192.168.xxx.xxx:7500
+    token-source-plugin: ${QUIC_TUN_TOKEN_SOURCE_PLUGIN} # Default to Fixed
+    token-source: ${QUIC_TUN_TOKEN_SOURCE} # eg: tcp:192.168.110.116:22
+    cert-file: ${QUIC_TUN_CLIENT_SECURE_TLS_CERT_KEY_CERT_FILE} # x509 certificate
+    key-file: ${QUIC_TUN_CLIENT_SECURE_TLS_CERT_KEY_PRIVATE_KEY_FILE} # TLS private key
+    verify-server: ${QUIC_TUN_CLIETN_VERIFY_SERVER} # Default to false
+    ca-file: ${QUIC_TUN_CLIENT_CA_FILE} # Default to ""
+
+restfulapi:
+    api-listen-address: ${QUIC_TUN_API_LISTEN_ADDRESS} # Default to 0.0.0.0
+    api-listen-port: ${QUIC_TUN_API_LISTEN_PORT} # Default to 8086
+ 
