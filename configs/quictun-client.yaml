@@ -1,0 +1,16 @@
+# quic-tun-client config
+
+# Client
+listen-on: ${QUIC_TUN_CLIENT_BIND_ADDRESS} # (default "tcp:127.0.0.1:6500")
+server-endpoint: ${QUIC_TUN_SERVER_ADDRESS} # The address to connect to the QUIC-TUN server. (eg 192.168.xxx.xxx:7500)
+token-source-plugin: ${QUIC_TUN_TOKEN_SOURCE_PLUGIN} # (default "Fixed")
+token-source: ${QUIC_TUN_TOKEN_SOURCE} # (eg tcp:192.168.110.116:22)
+
+# TLS
+cert-file: ${QUIC_TUN_CLIENT_SECURE_TLS_CERT_KEY_CERT_FILE} # x509 certificate
+key-file: ${QUIC_TUN_CLIENT_SECURE_TLS_CERT_KEY_PRIVATE_KEY_FILE} # TLS private key
+verify-remote-endpoint: ${QUIC_TUN_CLIETN_VERIFY_SERVER} # (default false)
+ca-file: ${QUIC_TUN_CLIENT_CA_FILE}
+
+# RestfulAPI
+httpd-listen-on: ${QUIC_TUN_CLIENT_API_LISTEN_ADDRESS} # (default 0.0.0.0:8086)

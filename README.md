@@ -67,7 +67,7 @@ Start up server side endpoint
 Start up client side endpoint
 
 ```console
-./quictun-client --listen-on tcp:127.0.0.1:6500 --server-endpoint 172.18.31.36:7500 --token-source tcp:172.18.30.117:22 --insecure-skip-verify True
+./quictun-client --listen-on tcp:127.0.0.1:6500 --server-endpoint 172.18.31.36:7500 --token-source tcp:172.18.30.117:22
 ```
 
 **Note:** The value specified by `--token-source` used to tell `quictun-server` the application address that the client want to access.
@@ -99,7 +99,7 @@ At client side, We address the token plugin as token source plugin, related comm
 Example:
 
 ```console
-./quictun-client --listen-on tcp:127.0.0.1:6500 --server-endpoint 172.18.31.36:7500 --token-source-plugin Fixed --token-source tcp:172.18.30.117:22 --insecure-skip-verify True
+./quictun-client --listen-on tcp:127.0.0.1:6500 --server-endpoint 172.18.31.36:7500 --token-source-plugin Fixed --token-source tcp:172.18.30.117:22
 ```
 
 ### File
@@ -119,7 +119,7 @@ The first column are the client application's IP addresses, the second column ar
 Example:
 
 ```console
-./quictun-client --insecure-skip-verify --server-endpoint 127.0.0.1:7500 --token-source-plugin File --token-source /etc/quictun/tokenfile --listen-on tcp:172.18.31.36:6622
+./quictun-client --server-endpoint 127.0.0.1:7500 --token-source-plugin File --token-source /etc/quictun/tokenfile --listen-on tcp:172.18.31.36:6622
 ```
 
 ### quictun-server
