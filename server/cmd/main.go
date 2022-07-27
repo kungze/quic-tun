@@ -10,28 +10,128 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"flag"
 	"fmt"
 	"math/big"
 	"os"
 	"strings"
 
+	"github.com/kungze/quic-tun/pkg/options"
 	"github.com/kungze/quic-tun/pkg/restfulapi"
 	"github.com/kungze/quic-tun/pkg/token"
 	"github.com/kungze/quic-tun/server"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"k8s.io/klog/v2"
 )
 
 var (
-	listenSocket      string
-	keyFile           string
-	certFile          string
-	caFile            string
-	verifyClient      bool
-	tokenParserPlugin string
-	tokenParserKey    string
-	apiListenOn       string
+	serOptions *options.ServerOptions
+	apiOptions *options.RestfulAPIOptions
+	secOptions *options.SecureOptions
 )
+
+func buildCommand(basename string) *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:   basename,
+		Short: "Start up the server side endpoint",
+		Long: `Establish a fast&security tunnel,
+make you can access remote TCP/UNIX application like local application.
+	   
+Find more quic-tun information at:
+	https://github.com/kungze/quic-tun/blob/master/README.md`,
+		RunE: runCommand,
+	}
+	// Initialize the flags needed to start the server
+	rootCmd.Flags().AddGoFlagSet(flag.CommandLine)
+	serOptions.AddFlags(rootCmd.Flags())
+	apiOptions.AddFlags(rootCmd.Flags())
+	secOptions.AddFlags(rootCmd.Flags())
+	options.AddConfigFlag(basename, rootCmd.Flags())
+
+	return rootCmd
+}
+
+func runCommand(cmd *cobra.Command, args []string) error {
+	options.PrintWorkingDir()
+	options.PrintFlags(cmd.Flags())
+	options.PrintConfig()
+
+	if err := viper.BindPFlags(cmd.Flags()); err != nil {
+		return err
+	}
+
+	if err := viper.Unmarshal(serOptions); err != nil {
+		return err
+	}
+
+	if err := viper.Unmarshal(apiOptions); err != nil {
+		return err
+	}
+
+	if err := viper.Unmarshal(secOptions); err != nil {
+		return err
+	}
+
+	// run server
+	runFunc(serOptions, apiOptions, secOptions)
+	return nil
+}
+
+func runFunc(so *options.ServerOptions, ao *options.RestfulAPIOptions, seco *options.SecureOptions) {
+
+	keyFile := seco.KeyFile
+	certFile := seco.CertFile
+	verifyClient := seco.VerifyRemoteEndpoint
+	caFile := seco.CaFile
+	tokenParserPlugin := so.TokenParserPlugin
+	tokenParserKey := so.TokenParserKey
+
+	var tlsConfig *tls.Config
+	if keyFile == "" || certFile == "" {
+		tlsConfig = generateTLSConfig()
+	} else {
+		tlsCert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			klog.ErrorS(err, "Certificate file or private key file is invalid.")
+			return
+		}
+		tlsConfig = &tls.Config{
+			Certificates: []tls.Certificate{tlsCert},
+			NextProtos:   []string{"quic-tun"},
+		}
+	}
+	if verifyClient {
+		if caFile == "" {
+			certPool, err := x509.SystemCertPool()
+			if err != nil {
+				klog.ErrorS(err, "Failed to load system cert pool")
+				return
+			}
+			tlsConfig.ClientCAs = certPool
+		} else {
+			caPemBlock, err := os.ReadFile(caFile)
+			if err != nil {
+				klog.ErrorS(err, "Failed to read ca file.")
+			}
+			certPool := x509.NewCertPool()
+			certPool.AppendCertsFromPEM(caPemBlock)
+			tlsConfig.ClientCAs = certPool
+		}
+	}
+
+	// Start API server
+	httpd := restfulapi.NewHttpd(ao.HttpdListenOn)
+	go httpd.Start()
+
+	// Start server endpoint
+	s := &server.ServerEndpoint{
+		Address:     so.ListenOn,
+		TlsConfig:   tlsConfig,
+		TokenParser: loadTokenParserPlugin(tokenParserPlugin, tokenParserKey),
+	}
+	s.Start()
+}
 
 // Setup a bare-bones TLS config for the server
 func generateTLSConfig() *tls.Config {
@@ -67,69 +167,12 @@ func loadTokenParserPlugin(plugin string, key string) token.TokenParserPlugin {
 }
 
 func main() {
-	rootCmd := &cobra.Command{
-		Use:   "quictun-server",
-		Short: "Start up server side endpoint",
-		Run: func(cmd *cobra.Command, args []string) {
-			var tlsConfig *tls.Config
-			if keyFile == "" || certFile == "" {
-				tlsConfig = generateTLSConfig()
-			} else {
-				tlsCert, err := tls.LoadX509KeyPair(certFile, keyFile)
-				if err != nil {
-					klog.ErrorS(err, "Certificate file or private key file is invalid.")
-					return
-				}
-				tlsConfig = &tls.Config{
-					Certificates: []tls.Certificate{tlsCert},
-					NextProtos:   []string{"quic-tun"},
-				}
-			}
-			if verifyClient {
-				if caFile == "" {
-					certPool, err := x509.SystemCertPool()
-					if err != nil {
-						klog.ErrorS(err, "Failed to load system cert pool")
-						return
-					}
-					tlsConfig.ClientCAs = certPool
-				} else {
-					caPemBlock, err := os.ReadFile(caFile)
-					if err != nil {
-						klog.ErrorS(err, "Failed to read ca file.")
-					}
-					certPool := x509.NewCertPool()
-					certPool.AppendCertsFromPEM(caPemBlock)
-					tlsConfig.ClientCAs = certPool
-				}
-			}
-
-			// Start API server
-			httpd := restfulapi.NewHttpd(apiListenOn)
-			go httpd.Start()
-
-			// Start server endpoint
-			s := &server.ServerEndpoint{
-				Address:     listenSocket,
-				TlsConfig:   tlsConfig,
-				TokenParser: loadTokenParserPlugin(tokenParserPlugin, tokenParserKey),
-			}
-			s.Start()
-		},
-	}
-	defer klog.Flush()
-	rootCmd.PersistentFlags().StringVar(&listenSocket, "listen-on", "0.0.0.0:7500", "The address that quic-tun server side endpoint listen on")
-	rootCmd.PersistentFlags().StringVar(&tokenParserPlugin, "token-parser-plugin", "Cleartext", "The token parser plugin.")
-	rootCmd.PersistentFlags().StringVar(&tokenParserKey, "token-parser-key", "", "An argument to be passed to the token parse plugin on instantiation.")
-	rootCmd.PersistentFlags().StringVar(&keyFile, "key-file", "", "The private key file path.")
-	rootCmd.PersistentFlags().StringVar(&certFile, "cert-file", "", "The certificate file path")
-	rootCmd.PersistentFlags().BoolVar(&verifyClient, "verify-client", false, "Whether to require client certificate and verify it")
-	rootCmd.PersistentFlags().StringVar(
-		&caFile, "ca-file", "",
-		"The certificate authority file path, used to verify client endpoint certificate. If not specified, quictun try to load system certificate.")
-	rootCmd.PersistentFlags().StringVar(&apiListenOn, "httpd-listen-on", "0.0.0.0:8086", "The socket of the API(httpd) server listen on.")
-	err := rootCmd.Execute()
-	if err != nil {
+	// Initialize the options needed to start the server
+	serOptions = options.GetDefaultServerOptions()
+	apiOptions = options.GetDefaultRestfulAPIOptions()
+	secOptions = options.GetDefaultSecureOptions()
+	rootCmd := buildCommand("quictun-server")
+	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }

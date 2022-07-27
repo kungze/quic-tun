@@ -1,0 +1,15 @@
+# quic-tun-server config
+
+# Server
+listen-on: ${QUIC_TUN_SERVER_BIND_ADDRESS} # (default "0.0.0.0:7500")
+token-parser-plugin: ${QUIC_TUN_SERVER_TOKEN_PARSER_PLUGIN} # (default "Cleartext")
+token-parser-key: ${QUIC_TUN_SERVER_TOKEN_PARSER_KEY} # (default "")
+
+# TLS
+cert-file: ${QUIC_TUN_SERVER_SECURE_TLS_CERT_KEY_CERT_FILE} # x509 certificate
+key-file: ${QUIC_TUN_SERVER_SECURE_TLS_CERT_KEY_PRIVATE_KEY_FILE} # TLS private key
+verify-remote-endpoint: ${QUIC_TUN_SERVER_VERIFY_CLIENT} # (default false)
+ca-file: ${QUIC_TUN_SERVER_CA_FILE}
+
+# RestfulAPI
+httpd-listen-on: ${QUIC_TUN_SERVER_API_LISTEN_ADDRESS} # (default 0.0.0.0:8086)
