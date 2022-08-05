@@ -16,19 +16,20 @@ import (
 	"os"
 	"strings"
 
+	"github.com/kungze/quic-tun/pkg/log"
 	"github.com/kungze/quic-tun/pkg/options"
 	"github.com/kungze/quic-tun/pkg/restfulapi"
 	"github.com/kungze/quic-tun/pkg/token"
 	"github.com/kungze/quic-tun/server"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"k8s.io/klog/v2"
 )
 
 var (
 	serOptions *options.ServerOptions
 	apiOptions *options.RestfulAPIOptions
 	secOptions *options.SecureOptions
+	logOptions *log.Options
 )
 
 func buildCommand(basename string) *cobra.Command {
@@ -48,6 +49,7 @@ Find more quic-tun information at:
 	apiOptions.AddFlags(rootCmd.Flags())
 	secOptions.AddFlags(rootCmd.Flags())
 	options.AddConfigFlag(basename, rootCmd.Flags())
+	logOptions.AddFlags(rootCmd.Flags())
 
 	return rootCmd
 }
@@ -73,12 +75,18 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if err := viper.Unmarshal(logOptions); err != nil {
+		return err
+	}
+
 	// run server
 	runFunc(serOptions, apiOptions, secOptions)
 	return nil
 }
 
 func runFunc(so *options.ServerOptions, ao *options.RestfulAPIOptions, seco *options.SecureOptions) {
+	log.Init(logOptions)
+	defer log.Flush()
 
 	keyFile := seco.KeyFile
 	certFile := seco.CertFile
@@ -93,7 +101,7 @@ func runFunc(so *options.ServerOptions, ao *options.RestfulAPIOptions, seco *opt
 	} else {
 		tlsCert, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
-			klog.ErrorS(err, "Certificate file or private key file is invalid.")
+			log.Errorw("Certificate file or private key file is invalid.", "error", err.Error())
 			return
 		}
 		tlsConfig = &tls.Config{
@@ -105,14 +113,14 @@ func runFunc(so *options.ServerOptions, ao *options.RestfulAPIOptions, seco *opt
 		if caFile == "" {
 			certPool, err := x509.SystemCertPool()
 			if err != nil {
-				klog.ErrorS(err, "Failed to load system cert pool")
+				log.Errorw("Failed to load system cert pool", "error", err.Error())
 				return
 			}
 			tlsConfig.ClientCAs = certPool
 		} else {
 			caPemBlock, err := os.ReadFile(caFile)
 			if err != nil {
-				klog.ErrorS(err, "Failed to read ca file.")
+				log.Errorw("Failed to read ca file.", "error", err.Error())
 			}
 			certPool := x509.NewCertPool()
 			certPool.AppendCertsFromPEM(caPemBlock)
@@ -171,6 +179,8 @@ func main() {
 	serOptions = options.GetDefaultServerOptions()
 	apiOptions = options.GetDefaultRestfulAPIOptions()
 	secOptions = options.GetDefaultSecureOptions()
+	logOptions = log.NewOptions()
+
 	rootCmd := buildCommand("quictun-server")
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/kungze/quic-tun/pkg/classifier"
 	"github.com/kungze/quic-tun/pkg/constants"
+	"github.com/kungze/quic-tun/pkg/log"
 	"github.com/lucas-clemente/quic-go"
-	"k8s.io/klog/v2"
 )
 
 type tunnel struct {
@@ -45,7 +45,7 @@ func (t *tunnel) HandShake(ctx context.Context) bool {
 }
 
 func (t *tunnel) Establish(ctx context.Context) {
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	var wg sync.WaitGroup
 	wg.Add(2)
 	t.fillProperties(ctx)
@@ -119,7 +119,7 @@ func (t *tunnel) fillProperties(ctx context.Context) {
 	t.CreatedAt = time.Now().String()
 }
 
-func (t *tunnel) stream2Conn(logger klog.Logger, wg *sync.WaitGroup) {
+func (t *tunnel) stream2Conn(logger log.Logger, wg *sync.WaitGroup) {
 	defer func() {
 		(*t.Stream).Close()
 		(*t.Conn).Close()
@@ -131,11 +131,11 @@ func (t *tunnel) stream2Conn(logger klog.Logger, wg *sync.WaitGroup) {
 		_, err = io.Copy(*t.Conn, *t.Stream)
 	}
 	if err != nil {
-		logger.Error(err, "Can not forward packet from QUIC stream to TCP/UNIX socket")
+		logger.Errorw("Can not forward packet from QUIC stream to TCP/UNIX socket", "error", err.Error())
 	}
 }
 
-func (t *tunnel) conn2Stream(logger klog.Logger, wg *sync.WaitGroup) {
+func (t *tunnel) conn2Stream(logger log.Logger, wg *sync.WaitGroup) {
 	defer func() {
 		(*t.Stream).Close()
 		(*t.Conn).Close()
@@ -147,7 +147,7 @@ func (t *tunnel) conn2Stream(logger klog.Logger, wg *sync.WaitGroup) {
 		_, err = io.Copy(*t.Stream, *t.Conn)
 	}
 	if err != nil {
-		logger.Error(err, "Can not forward packet from TCP/UNIX socket to QUIC stream")
+		logger.Errorw("Can not forward packet from TCP/UNIX socket to QUIC stream", "error", err.Error())
 	}
 }
 

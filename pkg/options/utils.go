@@ -7,20 +7,20 @@ import (
 	"runtime"
 
 	"github.com/gosuri/uitable"
+	"github.com/kungze/quic-tun/pkg/log"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"k8s.io/klog/v2"
 )
 
 func PrintWorkingDir() {
 	wd, _ := os.Getwd()
-	klog.Infof("WorkingDir: %s", wd)
+	log.Infof("WorkingDir: %s", wd)
 }
 
 // PrintFlags logs the flags in the flagset.
 func PrintFlags(flags *pflag.FlagSet) {
 	flags.VisitAll(func(flag *pflag.Flag) {
-		klog.Infof("FLAG: --%s=%q", flag.Name, flag.Value)
+		log.Infof("FLAG: --%s=%q", flag.Name, flag.Value)
 	})
 }
 
@@ -35,6 +35,7 @@ func PrintConfig() {
 			table.AddRow(fmt.Sprintf("%s:", k), viper.Get(k))
 		}
 		fmt.Printf("%v", table)
+		fmt.Println()
 	}
 }
 

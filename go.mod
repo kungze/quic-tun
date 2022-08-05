@@ -11,7 +11,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/lucas-clemente/quic-go v0.26.0
 	github.com/spf13/viper v1.12.0
-	k8s.io/klog/v2 v2.60.1
+	go.uber.org/zap v1.17.0
 )
 
 require (
@@ -20,12 +20,13 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.6.0 // indirect
 )
 
 require (
 	github.com/cheekybits/genny v1.0.0 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
-	github.com/go-logr/logr v1.2.0 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/gosuri/uitable v0.0.4
 	github.com/hashicorp/hcl v1.0.0 // indirect

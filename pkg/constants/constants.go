@@ -19,7 +19,7 @@ const (
 	CannotConnServer = 0x03
 )
 
-// The key names of klog's additional key/value pairs
+// The key names of log's additional key/value pairs
 const (
 	ClientAppAddr      = "Client-App-Addr"
 	StreamID           = "Stream-ID"

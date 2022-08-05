@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/kungze/quic-tun/pkg/log"
 	"github.com/kungze/quic-tun/pkg/tunnel"
-	"k8s.io/klog/v2"
 )
 
 type errorResponse struct {
@@ -33,7 +33,7 @@ func (h *httpd) getAllStreams(w http.ResponseWriter, request *http.Request) {
 	}
 	_, err = w.Write(resp_json)
 	if err != nil {
-		klog.ErrorS(err, "Encounter error!")
+		log.Errorw("Encounter error!", "error", err.Error())
 	}
 }
 
