@@ -13,3 +13,13 @@ ca-file: ${QUIC_TUN_SERVER_CA_FILE}
 
 # RestfulAPI
 httpd-listen-on: ${QUIC_TUN_SERVER_API_LISTEN_ADDRESS} # (default 0.0.0.0:8086)
+
+# LOG
+log-name: quictun-server # Logger's name
+log-development: false # Is it in development mode. If it is in development mode, it will DPanicLevel for stack traces.
+log-level: info # Log level, the priority from low to high is：debug, info, warn, error, dpanic, panic, fatal。
+log-format: console # The supported log output formats currently support console and json. console is actually text format.
+log-disable-caller: false # Whether to enable caller, if enabled, the file, function and line number where the call log is located will be displayed in the log
+log-disable-stacktrace: false # Whether to disable printing stack information at panic and above levels
+log-output-paths: ${QUIC_TUN_LOG_DIR}/quictun-server.log,stdout # Supports output to multiple outputs, separated by commas. Supports output to standard output (stdout) and files.
+log-error-output-paths: ${QUIC_TUN_LOG_DIR}/quictun-server.error.log # Zap internal (non business) error log output path, multiple outputs, separated by commas

@@ -3,12 +3,11 @@ package classifier
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
-	"k8s.io/klog/v2"
+	"github.com/kungze/quic-tun/pkg/log"
 )
 
 const (
@@ -54,7 +53,7 @@ type spiceDiscriminator struct {
 	properties spiceProperties
 }
 
-func (s *spiceDiscriminator) analyzeServerHeader(logger klog.Logger, server *[]byte) int {
+func (s *spiceDiscriminator) analyzeServerHeader(logger log.Logger, server *[]byte) int {
 	logger.Info("Alalyze server application header data.")
 	// Get the first paket message size
 	var offset int = INITIAL_OFFSET + MESSAGE_SIZE_LENGTH
@@ -85,7 +84,7 @@ func (s *spiceDiscriminator) analyzeServerHeader(logger klog.Logger, server *[]b
 	for {
 		select {
 		case <-timer.C:
-			logger.Error(errors.New("Timeout"), "The timer is timeout during spice discriminator analyze server application data for main channel.")
+			logger.Errorw("The timer is timeout during spice discriminator analyze server application data for main channel.", "error", "Timeout")
 			return AFFIRM
 		default:
 			offset = offset + MESSAGE_TYPE_LENGTH
@@ -139,7 +138,7 @@ func (s *spiceDiscriminator) analyzeServerHeader(logger klog.Logger, server *[]b
 				s.properties.ServerUUID = uuid.String()
 				delete(messageTypeMap, "serverUUID")
 			default:
-				logger.Error(errors.New("unknown"), "Encounter unkunown packet.")
+				logger.Errorw("Encounter unkunown packet.", "error", "unknown")
 				return AFFIRM
 			}
 			if len(messageTypeMap) == 0 {
@@ -154,7 +153,7 @@ func (s *spiceDiscriminator) AnalyzeHeader(ctx context.Context, client *[]byte, 
 	if len(*client) < 21 {
 		return UNCERTAINTY
 	}
-	logger := klog.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	if string((*client)[:4]) != SPICE_MAGIC {
 		return DENY
 	}
