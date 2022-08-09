@@ -23,12 +23,11 @@ func GetDefaultSecureOptions() *SecureOptions {
 // AddFlags adds flags for a specific Server to the specified FlagSet.
 func (s *SecureOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&s.KeyFile, "key-file", s.KeyFile,
-		"File containing the default x509 private key matching --cert-file.")
+		"The private key file path.")
 	fs.StringVar(&s.CertFile, "cert-file", s.CertFile,
-		"File containing the default x509 Certificate for HTTPS. (CA cert, if any, concatenated "+
-			"after server cert).")
+		"The certificate file path.")
 	fs.StringVar(&s.CaFile, "ca-file", s.CaFile,
-		"The certificate authority file path, used to verify client endpoint certificate. "+
+		"The certificate authority file path, used to verify remote endpoint certificate. "+
 			"If not specified, quictun try to load system certificate.")
 	fs.BoolVar(&s.VerifyRemoteEndpoint, "verify-remote-endpoint", s.VerifyRemoteEndpoint,
 		"Whether to require remote endpoint certificate and verify it")
