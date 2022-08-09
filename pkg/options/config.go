@@ -44,8 +44,7 @@ func AddConfigFlag(basename string, fs *pflag.FlagSet) {
 		}
 
 		if err := viper.ReadInConfig(); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Error: failed to read configuration file(%s): %v\n", cfgFile, err)
-			os.Exit(1)
+			_, _ = fmt.Fprintf(os.Stdout, "WARN: failed to read configuration file(%s): %v\n", cfgFile, err)
 		}
 	})
 }
