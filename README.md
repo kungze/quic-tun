@@ -10,6 +10,8 @@
 Establish a fast&security tunnel, make you can access remote TCP/UNIX
 application like local application.
 
+[中文文档](https://kungze.github.io/documents/quic-tun)
+
 ## Overview
 
 ``Quic-tun`` contains two command tools: ``quictun-server`` and ``quictun-client``,
