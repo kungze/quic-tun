@@ -143,6 +143,8 @@ func loadTokenSourcePlugin(plugin string, source string) token.TokenSourcePlugin
 		return token.NewFixedTokenPlugin(source)
 	case "file":
 		return token.NewFileTokenSourcePlugin(source)
+	case "http":
+		return token.NewHttpTokenPlugin(source)
 	default:
 		panic(fmt.Sprintf("The token source plugin %s is invalid", plugin))
 	}

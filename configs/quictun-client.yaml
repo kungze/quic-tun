@@ -22,5 +22,5 @@ log-level: info # Log level, the priority from low to high is：debug, info, war
 log-format: console # The supported log output formats currently support console and json. console is actually text format.
 log-disable-caller: false # Whether to enable caller, if enabled, the file, function and line number where the call log is located will be displayed in the log
 log-disable-stacktrace: false # Whether to disable printing stack information at panic and above levels
-log-output-paths: ${QUIC_TUN_LOG_DIR}/quictun-server.log,stdout # Supports output to multiple outputs, separated by commas. Supports output to standard output (stdout) and files.
-log-error-output-paths: ${QUIC_TUN_LOG_DIR}/quictun-server.error.log # Zap internal (non business) error log output path, multiple outputs, separated by commas
+log-output-paths: ./quictun-client.log,stdout # Supports output to multiple outputs, separated by commas. Supports output to standard output (stdout) and files.
+log-error-output-paths: ./quictun-client.error.log # Zap internal (non business) error log output path, multiple outputs, separated by commas

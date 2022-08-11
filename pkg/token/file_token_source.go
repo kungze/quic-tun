@@ -25,7 +25,7 @@ func (t fileTokenSourcePlugin) GetToken(addr string) (string, error) {
 			return strings.Split(line, " ")[1], nil
 		}
 	}
-	return "", errors.New("Don't find valid token.")
+	return "", errors.New("don't find valid token")
 }
 
 // NewFileTokenSourcePlugin return a ``File`` type token source plugin.
