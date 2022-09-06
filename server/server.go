@@ -3,21 +3,157 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"io"
 	"net"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/kungze/quic-tun/pkg/constants"
 	"github.com/kungze/quic-tun/pkg/log"
+	"github.com/kungze/quic-tun/pkg/msg"
 	"github.com/kungze/quic-tun/pkg/token"
 	"github.com/kungze/quic-tun/pkg/tunnel"
 	"github.com/lucas-clemente/quic-go"
 )
 
 type ServerEndpoint struct {
-	Address     string
-	TlsConfig   *tls.Config
-	TokenParser token.TokenParserPlugin
+	Address        string
+	TlsConfig      *tls.Config
+	TokenParser    token.TokenParserPlugin
+	MiddleEndpoint string
+	SignKey        string
+}
+
+// PrepareStart used to complete the hole-punching operation before start quictun-server
+func (s *ServerEndpoint) PrepareStart() error {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true,
+		NextProtos:         []string{"quic-tun"},
+	}
+	certPool, err := x509.SystemCertPool()
+	if err != nil {
+		log.Errorw("Failed to load system cert pool", "error", err.Error())
+		return err
+	}
+	tlsConfig.ClientCAs = certPool
+
+	// Dial middle endpoint
+	session, err := quic.DialAddr(s.MiddleEndpoint, tlsConfig, &quic.Config{KeepAlive: true})
+	if err != nil {
+		panic(err)
+	}
+	log.Infow("Connection to middle endpoint successful", "local address", session.LocalAddr().String())
+
+	// Open strem
+	stream, err := session.OpenStreamSync(context.Background())
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+	log.Infow("Stream open successful", "stream ID", stream.StreamID())
+
+	frameCodec := msg.NewFrameCodec()
+	// Send msg
+	ns := &msg.NatHoleQServer{
+		SignKey: s.SignKey,
+	}
+
+	framePayload, err := msg.Encode(ns)
+	if err != nil {
+		panic(err)
+	}
+
+	err = frameCodec.Encode(stream, framePayload)
+	if err != nil {
+		panic(err)
+	}
+
+	// Receive msg
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Infof("Disconnect from middle: %v", err)
+			}
+		}()
+		for {
+			// handle ack
+			// read from the stream
+			ackFramePayLoad, err := frameCodec.Decode(stream)
+			if err != nil {
+				panic(err)
+			}
+
+			p, err := msg.Decode(ackFramePayLoad)
+			if err != nil {
+				panic(err)
+			}
+
+			switch p := p.(type) {
+			case *msg.NatHoleResp:
+				log.Infof("recv nathole resp: client public address is %s", p.QClientAddr)
+				go func() {
+					log.Info("Trying to punch a hole")
+					localUDPAddr, _ := net.ResolveUDPAddr("udp", session.LocalAddr().String())
+					remoteUDPAddr, _ := net.ResolveUDPAddr("udp", p.QClientAddr)
+
+					// close quic conn
+					log.Info("close the quictun-middle stream")
+					stream.Close()
+					err := session.CloseWithError(0, errors.New("close quic connection").Error())
+					if err != nil {
+						panic(err)
+					}
+
+					// start a udp conn
+					conn, err := net.DialUDP("udp", localUDPAddr, remoteUDPAddr)
+					if err != nil {
+						log.Error(err.Error())
+					}
+					defer conn.Close()
+					log.Infof("Real Dial UDP %s %s", conn.LocalAddr().String(), conn.RemoteAddr().String())
+
+					log.Info("send nat hole first message to quictun-client")
+					if _, err = conn.Write([]byte("server holeMsg")); err != nil {
+						log.Infow("send nat hole message to client error", "err", err.Error())
+					}
+
+					err = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+					if err != nil {
+						panic(err)
+					}
+
+					data := make([]byte, 1024)
+					n, _, err := conn.ReadFromUDP(data)
+					if err != nil {
+						log.Warnf("get nat hole message from quictun-client error: %v", err)
+						return
+					} else {
+						log.Infof("get nat hole message from quictun-client successful, recv holeMsg: %s", data[:n])
+					}
+					s.Address = conn.LocalAddr().String()
+
+					log.Info("send nat hole second message to quictun-client")
+					if _, err = conn.Write([]byte("server holeMsg")); err != nil {
+						log.Infow("send nat hole second message to quictun-client error", "err", err.Error())
+					}
+
+					wg.Done()
+				}()
+			default:
+				log.Error("unknown packet type")
+			}
+
+		}
+	}()
+
+	wg.Wait()
+	return nil
 }
 
 func (s *ServerEndpoint) Start() {
