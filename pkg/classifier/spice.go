@@ -14,6 +14,7 @@ const (
 	SPICE_MAGIC         = "REDQ"
 	MAJOR_VERSION_INDEX = 4
 	MINOR_VERSION_INDEX = 8
+	SESSION_ID_INDEX    = 16
 	CHANNEL_TYPE_INDEX  = 20
 	CHANNEL_MAIN        = 1
 	CHANNEL_DISPLAY     = 2
@@ -41,12 +42,23 @@ const (
 	SERVER_NAME_LENGTH_LENGTH = 4
 )
 
+const (
+	DISPLAY_CHANNELS_HINT_LENGTH  = 4
+	SUPPORTED_MOUSER_MODES_LENGTH = 4
+	CURRENT_MOUSE_MODE_LENGTH     = 4
+)
+
+type mainInitMessage struct {
+	CurrentMouseMode string `json:"currentMouseMode,omitempty"`
+}
+
 type spiceProperties struct {
-	Version     string `json:"version"`
-	SessionId   string `json:"sessionId"`
-	ChannelType string `json:"channelType"`
-	ServerName  string `json:"serverName,omitempty"`
-	ServerUUID  string `json:"serverUUID,omitempty"`
+	Version         string `json:"version"`
+	SessionId       string `json:"sessionId"`
+	ChannelType     string `json:"channelType"`
+	ServerName      string `json:"serverName,omitempty"`
+	ServerUUID      string `json:"serverUUID,omitempty"`
+	ExtraProperties any    `json:"extraProperties,omitempty"`
 }
 
 type spiceDiscriminator struct {
@@ -105,6 +117,7 @@ func (s *spiceDiscriminator) analyzeServerHeader(logger log.Logger, server *[]by
 				}
 				sessionIndex := offset - int(messageSize)
 				s.properties.SessionId = fmt.Sprintf("%x", (*server)[sessionIndex:sessionIndex+SESSION_ID_LENGTH])
+				s.properties.ExtraProperties = analyzeMainInitMessage(server, sessionIndex+SESSION_ID_LENGTH)
 				delete(messageTypeMap, "init")
 			case MESSAGE_TYPE_SERVER_NAME:
 				offset = offset + MESSAGE_SIZE_LENGTH
@@ -163,7 +176,7 @@ func (s *spiceDiscriminator) AnalyzeHeader(ctx context.Context, client *[]byte, 
 	if s.properties.ChannelType == "" {
 		s.properties = spiceProperties{
 			Version:   fmt.Sprintf("%x.%x", (*client)[MAJOR_VERSION_INDEX], (*client)[MINOR_VERSION_INDEX]),
-			SessionId: fmt.Sprintf("%x", (*client)[16:20]),
+			SessionId: fmt.Sprintf("%x", (*client)[SESSION_ID_INDEX:SESSION_ID_INDEX+SESSION_ID_LENGTH]),
 		}
 		// If the properties already instantiated, and the channel type is
 		// main, we to analy the server header data directly.
@@ -207,4 +220,20 @@ func (s *spiceDiscriminator) AnalyzeHeader(ctx context.Context, client *[]byte, 
 
 func (s *spiceDiscriminator) GetProperties(ctx context.Context) any {
 	return s.properties
+}
+
+func analyzeMainInitMessage(server *[]byte, offset int) *mainInitMessage {
+	cmmIndex := offset + DISPLAY_CHANNELS_HINT_LENGTH + SUPPORTED_MOUSER_MODES_LENGTH
+
+	currentMouseMode := "UNKNOW"
+	currentMouseModeMark := binary.LittleEndian.Uint32((*server)[cmmIndex : cmmIndex+CURRENT_MOUSE_MODE_LENGTH])
+	if currentMouseModeMark == 2 {
+		currentMouseMode = "CLIENT"
+	} else if currentMouseModeMark == 1 {
+		currentMouseMode = "SERVER"
+	}
+
+	return &mainInitMessage{
+		CurrentMouseMode: currentMouseMode,
+	}
 }
