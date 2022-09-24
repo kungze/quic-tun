@@ -194,6 +194,10 @@ $ curl http://127.0.0.1:18086/tunnels | jq .
     "serverAppAddr": "172.18.31.97:22",
     "remoteEndpointAddr": "172.18.29.161:46706",
     "createdAt": "2022-06-21 11:44:05.074778434 +0800 CST m=+86.092908233",
+    "serverTotalBytes": 1545,
+    "clientTotalBytes": 2221,
+    "serverSendRate": "0.00 kB/s",
+    "clientSendRate": "0.00 kB/s",
     "protocol": "",
     "protocolProperties": null
   }
@@ -217,6 +221,10 @@ call the query API, you can get the below response:
     "serverAppAddr": "172.18.11.2:5915",
     "remoteEndpointAddr": "172.18.29.161:56465",
     "createdAt": "2022-06-21 11:41:28.85774404 +0800 CST m=+47.535828999",
+    "serverTotalBytes": 1545,
+    "clientTotalBytes": 2221,
+    "serverSendRate": "0.00 kB/s",
+    "clientSendRate": "0.00 kB/s",
     "protocol": "spice",
     "protocolProperties": {
       "version": "2.2",
@@ -233,6 +241,10 @@ call the query API, you can get the below response:
     "serverAppAddr": "172.18.11.2:5915",
     "remoteEndpointAddr": "172.18.29.161:56465",
     "createdAt": "2022-06-21 11:41:28.937090895 +0800 CST m=+47.615175866",
+    "serverTotalBytes": 1545,
+    "clientTotalBytes": 2221,
+    "serverSendRate": "0.00 kB/s",
+    "clientSendRate": "0.00 kB/s",
     "protocol": "spice",
     "protocolProperties": {
       "version": "2.2",
@@ -247,6 +259,10 @@ call the query API, you can get the below response:
     "serverAppAddr": "172.18.11.2:5915",
     "remoteEndpointAddr": "172.18.29.161:56465",
     "createdAt": "2022-06-21 11:41:29.224234488 +0800 CST m=+47.902319441",
+    "serverTotalBytes": 1545,
+    "clientTotalBytes": 2221,
+    "serverSendRate": "0.00 kB/s",
+    "clientSendRate": "0.00 kB/s",
     "protocol": "spice",
     "protocolProperties": {
       "version": "2.2",
@@ -261,6 +277,10 @@ call the query API, you can get the below response:
     "serverAppAddr": "172.18.11.2:5915",
     "remoteEndpointAddr": "172.18.29.161:56465",
     "createdAt": "2022-06-21 11:41:28.93269002 +0800 CST m=+47.610774997",
+    "serverTotalBytes": 1545,
+    "clientTotalBytes": 2221,
+    "serverSendRate": "0.00 kB/s",
+    "clientSendRate": "0.00 kB/s",
     "protocol": "spice",
     "protocolProperties": {
       "version": "2.2",
@@ -275,6 +295,10 @@ call the query API, you can get the below response:
     "serverAppAddr": "172.18.11.2:5915",
     "remoteEndpointAddr": "172.18.29.161:56465",
     "createdAt": "2022-06-21 11:41:28.937563866 +0800 CST m=+47.615648836",
+    "serverTotalBytes": 1545,
+    "clientTotalBytes": 2221,
+    "serverSendRate": "0.00 kB/s",
+    "clientSendRate": "0.00 kB/s",
     "protocol": "spice",
     "protocolProperties": {
       "version": "2.2",
@@ -290,6 +314,10 @@ call the query API, you can get the below response:
     "remoteEndpointAddr": "172.18.29.161:56465",
     "createdAt": "2022-06-21 11:41:29.223947759 +0800 CST m=+47.902032695",
     "protocol": "spice",
+    "serverTotalBytes": 1545,
+    "clientTotalBytes": 2221,
+    "serverSendRate": "0.00 kB/s",
+    "clientSendRate": "0.00 kB/s",
     "protocolProperties": {
       "version": "2.2",
       "sessionId": "d0306d75",
@@ -303,6 +331,10 @@ call the query API, you can get the below response:
     "serverAppAddr": "172.18.11.2:5915",
     "remoteEndpointAddr": "172.18.29.161:56465",
     "createdAt": "2022-06-21 11:41:28.936673702 +0800 CST m=+47.614758657",
+    "serverTotalBytes": 1545,
+    "clientTotalBytes": 2221,
+    "serverSendRate": "0.00 kB/s",
+    "clientSendRate": "0.00 kB/s",
     "protocol": "spice",
     "protocolProperties": {
       "version": "2.2",
