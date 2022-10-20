@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/kungze/quic-tun/pkg/constants"
 	"github.com/kungze/quic-tun/pkg/log"
@@ -38,6 +39,9 @@ func (s *ServerEndpoint) Start() {
 			logger := log.WithValues(constants.ClientEndpointAddr, session.RemoteAddr().String())
 			logger.Info("A new client endpoint connect request accepted.")
 			go func() {
+				// First create the heartbeat stream.
+				keepClientWorking(session)
+
 				for {
 					// Wait client endpoint open a stream (A new steam means a new tunnel)
 					stream, err := session.AcceptStream(context.Background())
@@ -49,7 +53,6 @@ func (s *ServerEndpoint) Start() {
 					ctx := logger.WithContext(parent_ctx)
 					hsh := tunnel.NewHandshakeHelper(constants.AckMsgLength, handshake)
 					hsh.TokenParser = &s.TokenParser
-
 					tun := tunnel.NewTunnel(&stream, constants.ServerEndpoint)
 					tun.Hsh = &hsh
 					if !tun.HandShake(ctx) {
@@ -62,6 +65,32 @@ func (s *ServerEndpoint) Start() {
 			}()
 		}
 	}
+}
+
+func keepClientWorking(session quic.Session) {
+	stream, err := session.AcceptStream(context.Background())
+	if err != nil {
+		log.Errorw("Cannot accept heartbeat stream.", "error", err.Error())
+	}
+	go func() {
+		timeTick := time.NewTicker(30 * time.Second)
+		for {
+			select {
+			case <-timeTick.C:
+				buf := make([]byte, len("ping"))
+				_, err = stream.Read(buf)
+				if err != nil {
+					log.Errorw("Cannot read data for heartbeat stream.", "error", err.Error())
+				}
+				_, err = stream.Write([]byte("pong"))
+				if err != nil {
+					log.Errorw("Cannot write data for heartbeat stream.", "error", err.Error())
+				}
+			default:
+				continue
+			}
+		}
+	}()
 }
 
 func handshake(ctx context.Context, stream *quic.Stream, hsh *tunnel.HandshakeHelper) (bool, *net.Conn) {
