@@ -26,6 +26,7 @@ var (
 	apiOptions    *options.RestfulAPIOptions
 	secOptions    *options.SecureOptions
 	logOptions    *log.Options
+	doneCh        chan struct{}
 )
 
 func buildCommand(basename string) *cobra.Command {
@@ -93,6 +94,7 @@ func runFunc(co *options.ClientOptions, ao *options.RestfulAPIOptions, seco *opt
 	caFile := seco.CaFile
 	verifyServer := seco.VerifyRemoteEndpoint
 	apiListenOn := ao.HttpdListenOn
+	doneCh = make(chan struct{})
 
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: !verifyServer,
@@ -133,6 +135,7 @@ func runFunc(co *options.ClientOptions, ao *options.RestfulAPIOptions, seco *opt
 		ServerEndpointSocket: serverEndpointSocket,
 		TokenSource:          loadTokenSourcePlugin(tokenPlugin, tokenSource),
 		TlsConfig:            tlsConfig,
+		DoneCh:               doneCh,
 	}
 	c.Start()
 }
@@ -161,4 +164,9 @@ func main() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
+
+//export Stop
+func Stop() {
+	close(doneCh)
 }
