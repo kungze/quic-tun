@@ -9,6 +9,8 @@ import (
 
 	"github.com/kungze/quic-tun/pkg/constants"
 	"github.com/kungze/quic-tun/pkg/log"
+	nattraversal "github.com/kungze/quic-tun/pkg/nat-traversal"
+	"github.com/kungze/quic-tun/pkg/options"
 	"github.com/kungze/quic-tun/pkg/token"
 	"github.com/kungze/quic-tun/pkg/tunnel"
 	"github.com/lucas-clemente/quic-go"
@@ -20,9 +22,32 @@ type ServerEndpoint struct {
 	TokenParser token.TokenParserPlugin
 }
 
-func (s *ServerEndpoint) Start() {
+func (s *ServerEndpoint) Start(nt *options.NATTraversalOptions) {
+	if nt.NATTraversalMode {
+		for {
+			//sdpCh := make(chan sdp.SessionDescription)
+			//nattraversal.Subscribe(nt, sdpCh)
+			//remoteSD := <-sdpCh
+			conn := nattraversal.ListenUDP(&nattraversal.ConnConfig{Nt: *nt})
+			go s.new(conn)
+		}
+	} else {
+		laddr, err := net.ResolveUDPAddr("udp", s.Address)
+		if err != nil {
+			panic(err)
+		}
+		conn, err := net.ListenUDP("udp", laddr)
+		if err != nil {
+			panic(err)
+		}
+		s.new(conn)
+	}
+}
+
+func (s *ServerEndpoint) new(conn net.PacketConn) {
 	// Listen a quic(UDP) socket.
-	listener, err := quic.ListenAddr(s.Address, s.TlsConfig, nil)
+	// listener, err := quic.ListenAddr(s.Address, s.TlsConfig, nil)
+	listener, err := quic.Listen(conn, s.TlsConfig, nil)
 	if err != nil {
 		panic(err)
 	}

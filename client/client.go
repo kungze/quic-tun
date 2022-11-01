@@ -10,6 +10,8 @@ import (
 
 	"github.com/kungze/quic-tun/pkg/constants"
 	"github.com/kungze/quic-tun/pkg/log"
+	nattraversal "github.com/kungze/quic-tun/pkg/nat-traversal"
+	"github.com/kungze/quic-tun/pkg/options"
 	"github.com/kungze/quic-tun/pkg/token"
 	"github.com/kungze/quic-tun/pkg/tunnel"
 	"github.com/lucas-clemente/quic-go"
@@ -22,9 +24,27 @@ type ClientEndpoint struct {
 	TlsConfig            *tls.Config
 }
 
-func (c *ClientEndpoint) Start() {
+func (c *ClientEndpoint) Start(nt *options.NATTraversalOptions) {
+	if nt.NATTraversalMode {
+		conn := nattraversal.DialUDP(&nattraversal.ConnConfig{Nt: *nt})
+		c.new(conn, conn.Conn.RemoteAddr(), conn.Conn.LocalAddr().String())
+	} else {
+		raddr, err := net.ResolveUDPAddr("udp", c.ServerEndpointSocket)
+		if err != nil {
+			panic(err)
+		}
+		conn, err := net.DialUDP("udp", nil, raddr)
+		if err != nil {
+			panic(err)
+		}
+		c.new(conn, raddr, c.ServerEndpointSocket)
+	}
+}
+
+func (c *ClientEndpoint) new(conn net.PacketConn, raddr net.Addr, host string) {
 	// Dial server endpoint
-	session, err := quic.DialAddr(c.ServerEndpointSocket, c.TlsConfig, &quic.Config{KeepAlive: true})
+	// quic.DialAddr()
+	session, err := quic.Dial(conn, raddr, host, c.TlsConfig, &quic.Config{KeepAlive: true})
 	if err != nil {
 		panic(err)
 	}
