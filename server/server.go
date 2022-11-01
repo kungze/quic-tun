@@ -25,11 +25,32 @@ type ServerEndpoint struct {
 func (s *ServerEndpoint) Start(nt *options.NATTraversalOptions) {
 	if nt.NATTraversalMode {
 		for {
-			//sdpCh := make(chan sdp.SessionDescription)
-			//nattraversal.Subscribe(nt, sdpCh)
-			//remoteSD := <-sdpCh
-			conn := nattraversal.ListenUDP(&nattraversal.ConnConfig{Nt: *nt})
-			go s.new(conn)
+			connCtrl := nattraversal.NewConnCtrl(nt)
+			// Subscribe and wait for messages from the remote peer
+			connCtrl.MqttClient = nattraversal.NewMQTTClient(connCtrl.Nt, connCtrl.SdCh)
+			nattraversal.Subscribe(connCtrl.MqttClient)
+			log.Debug("wait for new client connection")
+			connCtrl.RemoteSd = <-connCtrl.SdCh
+			ctx, cancel := context.WithCancel(context.TODO())
+			go func() {
+				go nattraversal.ListenUDP(ctx, connCtrl)
+				select {
+				case <-connCtrl.ExitChan:
+					log.Warn("first nat traversal failed, the second nat traversal attempt")
+					go nattraversal.DialUDP(ctx, connCtrl)
+					select {
+					case <-connCtrl.ConvertExitChan:
+						log.Warn("nat traversal faild!")
+						cancel()
+					case conn := <-connCtrl.ConnChan:
+						log.Infof("nat traversal success! Remote address is %s", conn.Conn.RemoteAddr())
+						go s.new(conn)
+					}
+				case conn := <-connCtrl.ConnChan:
+					log.Info("nat traversal success!")
+					go s.new(conn)
+				}
+			}()
 		}
 	} else {
 		laddr, err := net.ResolveUDPAddr("udp", s.Address)

@@ -4,125 +4,124 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/kungze/quic-tun/pkg/log"
 	"github.com/kungze/quic-tun/pkg/options"
 	"github.com/pion/ice/v2"
-	"github.com/pion/randutil"
 	"github.com/pion/sdp/v3"
 )
 
-type connection struct {
+type Connection struct {
 	Conn *ice.Conn
 	// localSD sdp.SessionDescription
-	remoteTopic string
+	// remoteTopic string
 }
 
-type ConnConfig struct {
+type ConnCtrl struct {
 	//	RemoteSD sdp.SessionDescription
 	Nt options.NATTraversalOptions
+	// Control side transition flag, set to true when the first nat traversal fails
+	ControllingConvert bool
+	// The mqtt publish hold tag is used to enable subscribers to receive pre-published messages
+	MqttRetained    bool
+	ExitChan        chan struct{}
+	ConvertExitChan chan struct{}
+	ConnChan        chan *Connection
+	IceAgent        *ice.Agent
+	ConvertIceAgent *ice.Agent
+	SdCh            chan sdp.SessionDescription
+	RemoteSd        sdp.SessionDescription
+	MqttClient      MQTTClient
+	Connection      *Connection
 }
 
-func newSessionID() (uint64, error) {
-	// https://tools.ietf.org/html/draft-ietf-rtcweb-jsep-26#section-5.2.1
-	// Session ID is recommended to be constructed by generating a 64-bit
-	// quantity with the highest bit set to zero and the remaining 63-bits
-	// being cryptographically random.
-	id, err := randutil.CryptoUint64()
-	return id & (^(uint64(1) << 63)), err
-}
-
-func ListenUDP(opt *ConnConfig) *connection {
-	sdCh := make(chan sdp.SessionDescription)
-	mqttClient := NewMQTTClient(opt.Nt, sdCh)
-	Subscribe(mqttClient)
-	remoteSd := <-sdCh
-	var iceScheme ice.SchemeType
-	switch strings.ToLower(opt.Nt.ICEServerScheme) {
-	case "stun":
-		iceScheme = ice.SchemeTypeSTUN
-	case "turn":
-		iceScheme = ice.SchemeTypeTURN
-	case "stuns":
-		iceScheme = ice.SchemeTypeSTUNS
-	case "turns":
-		iceScheme = ice.SchemeTypeTURNS
-	default:
-		panic(fmt.Errorf("Invalid ICE sheme: %s", opt.Nt.ICEServerScheme))
+func NewConnCtrl(nt *options.NATTraversalOptions) *ConnCtrl {
+	connCtrl := &ConnCtrl{
+		Nt:                 *nt,
+		ControllingConvert: false,
+		MqttRetained:       false,
+		ExitChan:           make(chan struct{}),
+		ConvertExitChan:    make(chan struct{}),
+		ConnChan:           make(chan *Connection),
+		SdCh:               make(chan sdp.SessionDescription),
 	}
-	iceUrl := ice.URL{Scheme: iceScheme, Host: opt.Nt.ICEServerURL, Port: 3478, Proto: ice.ProtoTypeUDP, Username: opt.Nt.ICEServerUsername, Password: opt.Nt.ICEServerPassword}
-	iceAgent, err := ice.NewAgent(
-		&ice.AgentConfig{
-			Urls:         []*ice.URL{&iceUrl},
-			NetworkTypes: []ice.NetworkType{ice.NetworkTypeUDP4},
-			Lite:         false,
-		})
+	return connCtrl
+}
+
+func ListenUDP(ctx context.Context, connCtrl *ConnCtrl) {
+
+	connection := &Connection{Conn: nil}
+	iceAgent := newICEAgent(connCtrl)
+
+	if connCtrl.ControllingConvert {
+		connCtrl.ConvertIceAgent = iceAgent
+	} else {
+		connCtrl.IceAgent = iceAgent
+	}
+
+	remoteUfrag, _ := connCtrl.RemoteSd.Attribute("ice-ufrag")
+	remotePwd, _ := connCtrl.RemoteSd.Attribute("ice-pwd")
+	err := iceAgent.SetRemoteCredentials(remoteUfrag, remotePwd)
 	if err != nil {
 		panic(err)
 	}
-
-	remoteUfrag, _ := remoteSd.Attribute("ice-ufrag")
-	remotePwd, _ := remoteSd.Attribute("ice-pwd")
-	err = iceAgent.SetRemoteCredentials(remoteUfrag, remotePwd)
-	if err != nil {
-		panic(err)
-	}
-	for _, attr := range remoteSd.Attributes {
+	for _, attr := range connCtrl.RemoteSd.Attributes {
 		if attr.IsICECandidate() {
 			candi, err := ice.UnmarshalCandidate(attr.Value)
 			if err != nil {
 				panic(err)
 			}
-			iceAgent.AddRemoteCandidate(candi)
+			if err := iceAgent.AddRemoteCandidate(candi); err != nil {
+				panic(err)
+			}
 		}
 	}
 
-	remoteTopic, _ := remoteSd.Attribute("remote-topic")
-	mqttClient.RemoteTopic = fmt.Sprintf("kungze.com/quic-tun/%s", remoteTopic)
-
+	// Wait for the gather candidates to complete and write the candidates information to localSD
 	gaterCompleteChan := make(chan bool)
 	localSD, err := sdp.NewJSEPSessionDescription(false)
 	if err != nil {
 		panic(err)
 	}
-	// var localSD = new(sdp.SessionDescription)
-	// sid, err := newSessionID()
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// localSD.Origin = sdp.Origin{
-	// 	Username:       "kungze",
-	// 	SessionID:      sid,
-	// 	SessionVersion: uint64(time.Now().Unix()),
-	// 	NetworkType:    "IN",
-	// 	AddressType:    "IP4",
-	// 	UnicastAddress: "0.0.0.0",
-	// }
-	iceAgent.OnCandidate(func(c ice.Candidate) {
+	_ = iceAgent.OnCandidate(func(c ice.Candidate) {
 		if c != nil {
-			fmt.Printf("%s\n", c.Marshal())
-			localSD.WithValueAttribute("candidate", c.Marshal())
-			//localMD = localMD.WithCandidate(c.Marshal())
-			// localSD.WithValueAttribute(sdp.AttrKeyCandidate, c.Marshal())
+			log.Debugf("Candidate info: %s\n", c.Marshal())
+			localSD.WithValueAttribute(sdp.AttrKeyCandidate, c.Marshal())
 		} else {
 			gaterCompleteChan <- true
 		}
 	})
-
-	iceAgent.OnConnectionStateChange(func(cs ice.ConnectionState) {
-		fmt.Printf("xxxxxxxxxxxxxxxxxxxxxxx OnConnectionStateChange :%s\n", cs.String())
+	_ = iceAgent.OnConnectionStateChange(func(cs ice.ConnectionState) {
+		log.Debugf("OnConnectionStateChange :%s\n", cs.String())
+		if connCtrl.Connection == nil {
+			if cs == ice.ConnectionStateFailed && connCtrl.ControllingConvert {
+				log.Warn("the second nat traversal failed!")
+				connCtrl.ConvertExitChan <- struct{}{}
+			} else if cs == ice.ConnectionStateFailed && !connCtrl.ControllingConvert {
+				log.Warn("the first nat traversal failed!")
+				connCtrl.Nt.MQTTTopicKey, _ = connCtrl.RemoteSd.Attribute("convert-topic")
+				if connCtrl.Nt.STUNServerURLConvert != "" {
+					connCtrl.Nt.STUNServerURL = connCtrl.Nt.STUNServerURLConvert
+				}
+				connCtrl.ControllingConvert = true
+				connCtrl.MqttRetained = true
+				connCtrl.IceAgent.Close()
+				connCtrl.ExitChan <- struct{}{}
+			}
+		}
 	})
-	iceAgent.OnSelectedCandidatePairChange(func(c1, c2 ice.Candidate) {
-		fmt.Printf("xxxxxxxxxxxxxxxxxxxxxxxxxx OnSelectedCandidatePairChange c1: %s\n", c1.String())
-		fmt.Printf("xxxxxxxxxxxxxxxxxxxxxxxxxx OnSelectedCandidatePairChange c2: %s\n", c2.String())
+	_ = iceAgent.OnSelectedCandidatePairChange(func(c1, c2 ice.Candidate) {
+		log.Debugf("OnSelectedCandidatePairChange c1: %s\n", c1.String())
+		log.Debugf("OnSelectedCandidatePairChange c2: %s\n", c2.String())
 	})
-	err = iceAgent.GatherCandidates()
-	if err != nil {
+	if err = iceAgent.GatherCandidates(); err != nil {
 		panic(err)
 	}
+	<-gaterCompleteChan
 
+	// Get the local auth details and save to localSD
 	username, password, err := iceAgent.GetLocalUserCredentials()
 	if err != nil {
 		panic(err)
@@ -130,142 +129,198 @@ func ListenUDP(opt *ConnConfig) *connection {
 	localSD.WithValueAttribute("ice-ufrag", username)
 	localSD.WithValueAttribute("ice-pwd", password)
 
-	<-gaterCompleteChan
 	payload, err := localSD.Marshal()
 	if err != nil {
 		panic(err)
 	}
-	Publish(mqttClient, payload)
-	user, pwd, err := iceAgent.GetRemoteUserCredentials()
-	if err != nil {
-		panic(err)
-	}
-	conn, err := iceAgent.Accept(context.Background(), user, pwd)
-	if err != nil {
-		panic(err)
-	}
+	// Get the remote topic and publish the localSD message
+	remoteTopic, _ := connCtrl.RemoteSd.Attribute("remote-topic")
+	connCtrl.MqttClient.RemoteTopic = fmt.Sprintf("kungze.com/quic-tun/%s", remoteTopic)
+	log.Debugf("Publish msg, topic: %s", connCtrl.MqttClient.RemoteTopic)
+	Publish(connCtrl.MqttClient, payload, true)
 
-	return &connection{Conn: conn}
+	log.Debug("iceAgent start accept")
+	// Accept blocks until at least one ice candidate pair has successfully connected.
+	conn, err := iceAgent.Accept(ctx, remoteUfrag, remotePwd)
+	log.Debug("ice agent accept exec")
+	if err != nil {
+		switch err {
+		case ice.ErrCanceledByCaller:
+			log.Warn("iceAgent accept canceled by caller")
+		case ice.ErrClosed:
+			log.Warn("iceAgent accept canceled by closed")
+		default:
+			panic(err)
+		}
+	}
+	if conn != nil {
+		connection.Conn = conn
+		connCtrl.Connection = connection
+		connCtrl.ConnChan <- connection
+	}
 }
 
-func DialUDP(opt *ConnConfig) *connection {
-
-	var iceScheme ice.SchemeType
-	switch strings.ToLower(opt.Nt.ICEServerScheme) {
-	case "stun":
-		iceScheme = ice.SchemeTypeSTUN
-	case "turn":
-		iceScheme = ice.SchemeTypeTURN
-	case "stuns":
-		iceScheme = ice.SchemeTypeSTUNS
-	case "turns":
-		iceScheme = ice.SchemeTypeTURNS
-	default:
-		panic(fmt.Errorf("Invalid ICE sheme: %s", opt.Nt.ICEServerScheme))
-	}
-	iceUrl := ice.URL{Scheme: iceScheme, Host: opt.Nt.ICEServerURL, Port: 3478, Proto: ice.ProtoTypeUDP, Username: opt.Nt.ICEServerUsername, Password: opt.Nt.ICEServerPassword}
-	iceAgent, err := ice.NewAgent(
-		&ice.AgentConfig{
-			Urls:         []*ice.URL{&iceUrl},
-			NetworkTypes: []ice.NetworkType{ice.NetworkTypeUDP4},
-			Lite:         false,
-		})
-	if err != nil {
-		panic(err)
+func DialUDP(ctx context.Context, connCtrl *ConnCtrl) {
+	connection := &Connection{Conn: nil}
+	iceAgent := newICEAgent(connCtrl)
+	if connCtrl.ControllingConvert {
+		connCtrl.ConvertIceAgent = iceAgent
+	} else {
+		connCtrl.IceAgent = iceAgent
 	}
 
-	gaterCompleteChan := make(chan bool)
-
+	// Wait for the gather candidates to complete and write the candidates information to localSD
+	gaterCompleteChan := make(chan struct{})
 	localSD, err := sdp.NewJSEPSessionDescription(false)
 	if err != nil {
 		panic(err)
 	}
+	// Generate local topic and faild convert topic
+	localTopic := uuid.NewString()
+	if connCtrl.ControllingConvert {
+		localTopic = connCtrl.Nt.MQTTTopicKey + "-" + localTopic
+	}
+	localSD.WithValueAttribute("remote-topic", localTopic)
+	convertTopic := "convert-" + localTopic
+	localSD.WithValueAttribute("convert-topic", convertTopic)
 
-	// var localSD = new(sdp.SessionDescription)
-
-	// sid, err := newSessionID()
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// localSD.Origin = sdp.Origin{
-	// 	Username:       "kungze",
-	// 	SessionID:      sid,
-	// 	SessionVersion: uint64(time.Now().Unix()),
-	// 	NetworkType:    "IN",
-	// 	AddressType:    "IP4",
-	// 	UnicastAddress: "0.0.0.0",
-	// }
-
-	iceAgent.OnCandidate(func(c ice.Candidate) {
+	// When we have gathered a new ICE Candidate write it to the localSD
+	_ = iceAgent.OnCandidate(func(c ice.Candidate) {
 		if c != nil {
-			fmt.Printf("%s\n", c.Marshal())
-			localSD.WithValueAttribute("candidate", c.Marshal())
-			//localMD = localMD.WithCandidate(c.Marshal())
-			// localSD.WithValueAttribute(sdp.AttrKeyCandidate, c.Marshal())
+			log.Debugf("Candidate info : %s\n", c.Marshal())
+			localSD.WithValueAttribute(sdp.AttrKeyCandidate, c.Marshal())
 		} else {
-			gaterCompleteChan <- true
+			gaterCompleteChan <- struct{}{}
 		}
 	})
-
-	iceAgent.OnConnectionStateChange(func(cs ice.ConnectionState) {
-		fmt.Printf("xxxxxxxxxxxxxxxxxxxxxxx OnConnectionStateChange :%s\n", cs.String())
+	// When ICE Connection state has change print to stdout
+	_ = iceAgent.OnConnectionStateChange(func(cs ice.ConnectionState) {
+		log.Debugf("OnConnectionStateChange :%s\n", cs.String())
+		if connCtrl.Connection == nil {
+			if cs == ice.ConnectionStateFailed && connCtrl.ControllingConvert {
+				log.Warn("the second nat traversal failed!")
+				connCtrl.ConvertExitChan <- struct{}{}
+			} else if cs == ice.ConnectionStateFailed && !connCtrl.ControllingConvert {
+				log.Warn("the first nat traversal failed!")
+				connCtrl.Nt.MQTTTopicKey = convertTopic
+				if connCtrl.Nt.STUNServerURLConvert != "" {
+					connCtrl.Nt.STUNServerURL = connCtrl.Nt.STUNServerURLConvert
+				}
+				connCtrl.ControllingConvert = true
+				connCtrl.IceAgent.Close()
+				connCtrl.ExitChan <- struct{}{}
+			}
+		}
 	})
-	iceAgent.OnSelectedCandidatePairChange(func(c1, c2 ice.Candidate) {
-		fmt.Printf("xxxxxxxxxxxxxxxxxxxxxxxxxx OnSelectedCandidatePairChange c1: %s\n", c1.String())
-		fmt.Printf("xxxxxxxxxxxxxxxxxxxxxxxxxx OnSelectedCandidatePairChange c2: %s\n", c2.String())
+	_ = iceAgent.OnSelectedCandidatePairChange(func(c1, c2 ice.Candidate) {
+		log.Debugf("OnSelectedCandidatePairChange c1: %s\n", c1.String())
+		log.Debugf("OnSelectedCandidatePairChange c2: %s\n", c2.String())
 	})
-	err = iceAgent.GatherCandidates()
-	if err != nil {
+	if err = iceAgent.GatherCandidates(); err != nil {
 		panic(err)
 	}
+	<-gaterCompleteChan
 
+	// Get the local auth details and save to localSD
 	username, password, err := iceAgent.GetLocalUserCredentials()
 	if err != nil {
 		panic(err)
 	}
-	//	localTopic := fmt.Sprintf("kungze.com/quic-tun/%s", uuid.NewString())
-	localTopic := uuid.NewString()
 	localSD.WithValueAttribute("ice-ufrag", username)
 	localSD.WithValueAttribute("ice-pwd", password)
-	localSD.WithValueAttribute("remote-topic", localTopic)
-	<-gaterCompleteChan
-	sdCh := make(chan sdp.SessionDescription)
-	mqttClient := NewMQTTClient(opt.Nt, sdCh)
+
+	// Get the remote topic from the configuration and publish messages to the topic
+	mqttClient := NewMQTTClient(connCtrl.Nt, connCtrl.SdCh)
+	mqttClient.RemoteTopic = fmt.Sprintf("kungze.com/quic-tun/%s", connCtrl.Nt.MQTTTopicKey)
 	payload, err := localSD.Marshal()
 	if err != nil {
 		panic(err)
 	}
-	mqttClient.RemoteTopic = fmt.Sprintf("kungze.com/quic-tun/%s", opt.Nt.MQTTTopicKey)
-	Publish(mqttClient, payload)
-	// mqttClient.Topic = uuid.NewString()
+	log.Debugf("Publish msg, topic: %s", mqttClient.RemoteTopic)
+	Publish(mqttClient, payload, connCtrl.MqttRetained)
+
+	// Set up the mqtt topic and subscribe to it
 	mqttClient.Topic = fmt.Sprintf("kungze.com/quic-tun/%s", localTopic)
 	Subscribe(mqttClient)
-	remoteSD := <-sdCh
-	remoteUfrag, _ := remoteSD.Attribute("ice-ufrag")
-	remotePwd, _ := remoteSD.Attribute("ice-pwd")
+	// Receives and sets the ice agent with this message
+	connCtrl.RemoteSd = <-connCtrl.SdCh
+	remoteUfrag, _ := connCtrl.RemoteSd.Attribute("ice-ufrag")
+	remotePwd, _ := connCtrl.RemoteSd.Attribute("ice-pwd")
 	err = iceAgent.SetRemoteCredentials(remoteUfrag, remotePwd)
 	if err != nil {
 		panic(err)
 	}
-	for _, attr := range remoteSD.Attributes {
+	for _, attr := range connCtrl.RemoteSd.Attributes {
 		if attr.IsICECandidate() {
 			candi, err := ice.UnmarshalCandidate(attr.Value)
 			if err != nil {
 				panic(err)
 			}
-			iceAgent.AddRemoteCandidate(candi)
+			if err := iceAgent.AddRemoteCandidate(candi); err != nil {
+				panic(err)
+			}
 		}
 	}
-	user, pwd, err := iceAgent.GetRemoteUserCredentials()
+	log.Debug("iceAgent start dial")
+	// Dial blocks until at least one ice candidate pair has successfully connected.
+	conn, err := iceAgent.Dial(ctx, remoteUfrag, remotePwd)
+	log.Debug("ice agent dial exec")
+	if err != nil {
+		switch err {
+		case ice.ErrCanceledByCaller:
+			log.Warn("ice agent dial canceled by caller")
+		case ice.ErrClosed:
+			log.Warn("ice agent dial canceled by closed")
+		default:
+			panic(err)
+		}
+	}
+	if conn != nil {
+		connection.Conn = conn
+		connCtrl.Connection = connection
+		connCtrl.ConnChan <- connection
+	}
+}
+
+func newICEAgent(connCtrl *ConnCtrl) *ice.Agent {
+	iceFailedTimeout := time.Duration(connCtrl.Nt.ICEFailedTimeout) * time.Second
+	disconnectedTimeout := 10 * time.Second
+
+	iceAgent, err := ice.NewAgent(
+		&ice.AgentConfig{
+			Urls:                getICEUrls(connCtrl),
+			NetworkTypes:        []ice.NetworkType{ice.NetworkTypeUDP4},
+			Lite:                false,
+			FailedTimeout:       &iceFailedTimeout,
+			DisconnectedTimeout: &disconnectedTimeout,
+		})
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("iceAgent xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx001")
-	conn, err := iceAgent.Dial(context.Background(), user, pwd)
-	if err != nil {
-		panic(err)
+	return iceAgent
+}
+
+func getICEUrls(connCtrl *ConnCtrl) []*ice.URL {
+	iceUrls := []*ice.URL{}
+	if connCtrl.Nt.STUNServerURL != "" {
+		iceSTUNScheme := ice.SchemeTypeSTUN
+		if connCtrl.Nt.STUNServerSecure {
+			iceSTUNScheme = ice.SchemeTypeSTUNS
+		}
+		iceSTUNUrl := ice.URL{Scheme: iceSTUNScheme, Host: connCtrl.Nt.STUNServerURL, Port: 3478, Proto: ice.ProtoTypeUDP, Username: connCtrl.Nt.STUNServerUsername, Password: connCtrl.Nt.STUNServerPassword}
+		iceUrls = append(iceUrls, &iceSTUNUrl)
 	}
-	return &connection{Conn: conn}
+	if connCtrl.ControllingConvert {
+		if connCtrl.Nt.TURNServerURL != "" {
+			iceTURNScheme := ice.SchemeTypeTURN
+			if connCtrl.Nt.TURNServerSecure {
+				iceTURNScheme = ice.SchemeTypeTURNS
+			}
+			iceTURNUrl := ice.URL{Scheme: iceTURNScheme, Host: connCtrl.Nt.STUNServerURL, Port: 3478, Proto: ice.ProtoTypeUDP, Username: connCtrl.Nt.STUNServerUsername, Password: connCtrl.Nt.STUNServerPassword}
+			iceUrls = append(iceUrls, &iceTURNUrl)
+		}
+	}
+	return iceUrls
 }
 
 // ReadFrom reads a packet from the connection,
@@ -277,7 +332,7 @@ func DialUDP(opt *ConnConfig) *connection {
 // the n > 0 bytes returned before considering the error err.
 // ReadFrom can be made to time out and return an error after a
 // fixed time limit; see SetDeadline and SetReadDeadline.
-func (c *connection) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
+func (c *Connection) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	num, err := c.Conn.Read(p)
 	return num, &net.UDPAddr{}, err
 }
@@ -286,18 +341,18 @@ func (c *connection) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 // WriteTo can be made to time out and return an Error after a
 // fixed time limit; see SetDeadline and SetWriteDeadline.
 // On packet-oriented connections, write timeouts are rare.
-func (c *connection) WriteTo(p []byte, addr net.Addr) (n int, err error) {
+func (c *Connection) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	return c.Conn.Write(p)
 }
 
 // Close closes the connection.
 // Any blocked ReadFrom or WriteTo operations will be unblocked and return errors.
-func (c *connection) Close() error {
+func (c *Connection) Close() error {
 	return c.Conn.Close()
 }
 
 // LocalAddr returns the local network address, if known.
-func (c *connection) LocalAddr() net.Addr {
+func (c *Connection) LocalAddr() net.Addr {
 	return c.Conn.LocalAddr()
 }
 
@@ -322,14 +377,14 @@ func (c *connection) LocalAddr() net.Addr {
 // the deadline after successful ReadFrom or WriteTo calls.
 //
 // A zero value for t means I/O operations will not time out.
-func (c *connection) SetDeadline(t time.Time) error {
+func (c *Connection) SetDeadline(t time.Time) error {
 	return nil
 }
 
 // SetReadDeadline sets the deadline for future ReadFrom calls
 // and any currently-blocked ReadFrom call.
 // A zero value for t means ReadFrom will not time out.
-func (c *connection) SetReadDeadline(t time.Time) error {
+func (c *Connection) SetReadDeadline(t time.Time) error {
 	return nil
 }
 
@@ -338,6 +393,6 @@ func (c *connection) SetReadDeadline(t time.Time) error {
 // Even if write times out, it may return n > 0, indicating that
 // some of the data was successfully written.
 // A zero value for t means WriteTo will not time out.
-func (c *connection) SetWriteDeadline(t time.Time) error {
+func (c *Connection) SetWriteDeadline(t time.Time) error {
 	return nil
 }
