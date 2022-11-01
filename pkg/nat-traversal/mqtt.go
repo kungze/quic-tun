@@ -5,12 +5,13 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/uuid"
+	"github.com/kungze/quic-tun/pkg/log"
 	"github.com/kungze/quic-tun/pkg/options"
 	"github.com/pion/sdp/v3"
 )
 
 type MQTTClient struct {
-	Client      mqtt.Client
+	mqtt.Client
 	Topic       string
 	RemoteTopic string
 }
@@ -18,7 +19,7 @@ type MQTTClient struct {
 func NewMQTTClient(nt options.NATTraversalOptions, ch chan<- sdp.SessionDescription) MQTTClient {
 
 	var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-		fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
+		log.Debugf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
 		remoteSD := new(sdp.SessionDescription)
 		err := remoteSD.Unmarshal(msg.Payload())
 		if err != nil {
@@ -28,11 +29,11 @@ func NewMQTTClient(nt options.NATTraversalOptions, ch chan<- sdp.SessionDescript
 	}
 
 	var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
-		fmt.Println("Connected")
+		log.Debug("Connected")
 	}
 
 	var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
-		fmt.Printf("Connect lost: %v", err)
+		log.Debugf("Connect lost: %v", err)
 	}
 
 	opts := mqtt.NewClientOptions()
@@ -54,12 +55,12 @@ func NewMQTTClient(nt options.NATTraversalOptions, ch chan<- sdp.SessionDescript
 }
 
 func Subscribe(client MQTTClient) {
-	token := client.Client.Subscribe(client.Topic, 1, nil)
+	token := client.Subscribe(client.Topic, 1, nil)
 	token.Wait()
-	fmt.Printf("Subscribed to topic: %s\n", client.Topic)
+	log.Debugf("Subscribed to topic: %s\n", client.Topic)
 }
 
-func Publish(client MQTTClient, payload any) {
-	token := client.Client.Publish(client.RemoteTopic, 0, false, payload)
+func Publish(client MQTTClient, payload any, retained bool) {
+	token := client.Publish(client.RemoteTopic, 0, retained, payload)
 	token.Wait()
 }
