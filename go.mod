@@ -12,6 +12,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/lucas-clemente/quic-go v0.26.0
 	github.com/pion/ice/v2 v2.2.11
+	github.com/pion/randutil v0.1.0
 	github.com/pion/sdp/v3 v3.0.6
 	github.com/spf13/viper v1.12.0
 	go.uber.org/zap v1.17.0
@@ -26,7 +27,6 @@ require (
 	github.com/pion/dtls/v2 v2.1.5 // indirect
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/mdns v0.0.5 // indirect
-	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/stun v0.3.5 // indirect
 	github.com/pion/transport v0.13.1 // indirect
 	github.com/pion/turn/v2 v2.0.8 // indirect

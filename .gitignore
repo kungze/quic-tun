@@ -16,3 +16,4 @@
 
 dist/
 .vscode/
+.devcontainer/
