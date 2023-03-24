@@ -75,6 +75,7 @@ func (s *ServerEndpoint) new(conn net.PacketConn) {
 	defer listener.Close()
 	log.Infow("Server endpoint start up successful", "listen address", listener.Addr())
 	for {
+		log.Debug("Wait client endpoint connect.")
 		// Wait client endpoint connection request.
 		session, err := listener.Accept(context.Background())
 		if err != nil {
@@ -85,12 +86,14 @@ func (s *ServerEndpoint) new(conn net.PacketConn) {
 			logger.Info("A new client endpoint connect request accepted.")
 			go func() {
 				for {
+					logger.Debug("Wait stream connection.")
 					// Wait client endpoint open a stream (A new steam means a new tunnel)
 					stream, err := session.AcceptStream(context.Background())
 					if err != nil {
 						logger.Errorw("Cannot accept a new stream.", "error", err.Error())
 						break
 					}
+					logger.Debug("A new stream accepted.")
 					logger := logger.WithValues(constants.StreamID, stream.StreamID())
 					ctx := logger.WithContext(parent_ctx)
 					hsh := tunnel.NewHandshakeHelper(constants.AckMsgLength, handshake)
@@ -110,7 +113,7 @@ func (s *ServerEndpoint) new(conn net.PacketConn) {
 	}
 }
 
-func handshake(ctx context.Context, stream *quic.Stream, hsh *tunnel.HandshakeHelper) (bool, *net.Conn) {
+func handshake(ctx context.Context, stream *quic.Stream, hsh *tunnel.HandshakeHelper, accessPort string) (bool, *net.Conn) {
 	logger := log.FromContext(ctx)
 	logger.Info("Starting handshake with client endpoint")
 	if _, err := io.CopyN(hsh, *stream, constants.TokenLength); err != nil {
@@ -121,7 +124,7 @@ func handshake(ctx context.Context, stream *quic.Stream, hsh *tunnel.HandshakeHe
 	if err != nil {
 		logger.Errorw("Failed to parse token", "error", err.Error())
 		hsh.SetSendData([]byte{constants.ParseTokenError})
-		_, _ = io.Copy(*stream, hsh)
+		_, _ = io.CopyN(*stream, hsh, constants.AckMsgLength)
 		return false, nil
 	}
 	logger = logger.WithValues(constants.ServerAppAddr, addr)
@@ -131,7 +134,7 @@ func handshake(ctx context.Context, stream *quic.Stream, hsh *tunnel.HandshakeHe
 	if err != nil {
 		logger.Errorw("Failed to dial server app", "error", err.Error())
 		hsh.SetSendData([]byte{constants.CannotConnServer})
-		_, _ = io.Copy(*stream, hsh)
+		_, _ = io.CopyN(*stream, hsh, constants.AckMsgLength)
 		return false, nil
 	}
 	logger.Info("Server app connect successful")
