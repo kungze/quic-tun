@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/kungze/quic-tun/pkg/constants"
 	"github.com/kungze/quic-tun/pkg/log"
@@ -22,12 +23,18 @@ type ClientEndpoint struct {
 	TlsConfig            *tls.Config
 }
 
+var (
+	session quic.Session
+)
+
 func (c *ClientEndpoint) Start() {
 	// Dial server endpoint
-	session, err := quic.DialAddr(c.ServerEndpointSocket, c.TlsConfig, &quic.Config{KeepAlive: true})
+	var err error
+	session, err = quic.DialAddr(c.ServerEndpointSocket, c.TlsConfig, &quic.Config{KeepAlive: true})
 	if err != nil {
 		panic(err)
 	}
+	go c.keepClientWorking()
 	parent_ctx := context.WithValue(context.TODO(), constants.CtxRemoteEndpointAddr, session.RemoteAddr().String())
 	// Listen on a TCP or UNIX socket, wait client application's connection request.
 	localSocket := strings.Split(c.LocalSocket, ":")
@@ -37,6 +44,7 @@ func (c *ClientEndpoint) Start() {
 	}
 	defer listener.Close()
 	log.Infow("Client endpoint start up successful", "listen address", listener.Addr())
+
 	for {
 		// Accept client application connectin request
 		conn, err := listener.Accept()
@@ -73,6 +81,46 @@ func (c *ClientEndpoint) Start() {
 				}
 				tun.Establish(ctx)
 			}()
+		}
+	}
+}
+
+func (c *ClientEndpoint) keepClientWorking() {
+	stream, err := session.OpenStreamSync(context.Background())
+	if err != nil {
+		log.Errorw("Failed to open stream to server endpoint.", "error", err.Error())
+		return
+	}
+	defer stream.Close()
+
+	timeTick := time.NewTicker(30 * time.Second)
+	for {
+		select {
+		case <-timeTick.C:
+			_, err = stream.Write([]byte("ping"))
+			if err != nil {
+				log.Errorw("Cannot read write for heartbeat stream.", "error", err.Error())
+			}
+			buf := make([]byte, len("pong"))
+			_, err = stream.Read(buf)
+			if err != nil {
+				log.Errorw("Cannot read data for heartbeat stream.", "error", err.Error())
+			}
+			if string(buf) != "pong" {
+				session, err = quic.DialAddr(c.ServerEndpointSocket, c.TlsConfig, &quic.Config{KeepAlive: true})
+				if err != nil {
+					log.Errorw("reconnect failed, Retry after 30s...")
+					break
+				}
+				stream, err = session.OpenStreamSync(context.Background())
+				if err != nil {
+					log.Errorw("Failed to open stream to server endpoint.", "error", err.Error())
+					return
+				}
+				log.Info("reconnect Success!")
+			}
+		default:
+			continue
 		}
 	}
 }
