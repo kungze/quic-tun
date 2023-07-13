@@ -20,6 +20,7 @@ type ClientEndpoint struct {
 	ServerEndpointSocket string
 	TokenSource          token.TokenSourcePlugin
 	TlsConfig            *tls.Config
+	DoneCh               chan struct{}
 }
 
 func (c *ClientEndpoint) Start() {
@@ -37,44 +38,51 @@ func (c *ClientEndpoint) Start() {
 	}
 	defer listener.Close()
 	log.Infow("Client endpoint start up successful", "listen address", listener.Addr())
-	for {
-		// Accept client application connectin request
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Errorw("Client app connect failed", "error", err.Error())
-		} else {
-			logger := log.WithValues(constants.ClientAppAddr, conn.RemoteAddr().String())
-			logger.Info("Client connection accepted, prepare to entablish tunnel with server endpint for this connection.")
-			go func() {
-				defer func() {
-					conn.Close()
-					logger.Info("Tunnel closed")
+	go func() {
+		for {
+			// Accept client application connectin request
+			conn, err := listener.Accept()
+			if err != nil {
+				log.Errorw("Client app connect failed", "error", err.Error())
+				if oe, ok := err.(*net.OpError); ok && oe.Op == "accept" {
+					break
+				}
+			} else {
+				logger := log.WithValues(constants.ClientAppAddr, conn.RemoteAddr().String())
+				logger.Info("Client connection accepted, prepare to entablish tunnel with server endpint for this connection.")
+				go func() {
+					defer func() {
+						conn.Close()
+						logger.Info("Tunnel closed")
+					}()
+					// Open a quic stream for each client application connection.
+					stream, err := session.OpenStreamSync(context.Background())
+					if err != nil {
+						logger.Errorw("Failed to open stream to server endpoint.", "error", err.Error())
+						return
+					}
+					defer stream.Close()
+					logger = logger.WithValues(constants.StreamID, stream.StreamID())
+					// Create a context argument for each new tunnel
+					ctx := context.WithValue(
+						logger.WithContext(parent_ctx),
+						constants.CtxClientAppAddr, conn.RemoteAddr().String())
+					hsh := tunnel.NewHandshakeHelper(constants.TokenLength, handshake)
+					hsh.TokenSource = &c.TokenSource
+					// Create a new tunnel for the new client application connection.
+					tun := tunnel.NewTunnel(&stream, constants.ClientEndpoint)
+					tun.Conn = &conn
+					tun.Hsh = &hsh
+					if !tun.HandShake(ctx) {
+						return
+					}
+					tun.Establish(ctx)
 				}()
-				// Open a quic stream for each client application connection.
-				stream, err := session.OpenStreamSync(context.Background())
-				if err != nil {
-					logger.Errorw("Failed to open stream to server endpoint.", "error", err.Error())
-					return
-				}
-				defer stream.Close()
-				logger = logger.WithValues(constants.StreamID, stream.StreamID())
-				// Create a context argument for each new tunnel
-				ctx := context.WithValue(
-					logger.WithContext(parent_ctx),
-					constants.CtxClientAppAddr, conn.RemoteAddr().String())
-				hsh := tunnel.NewHandshakeHelper(constants.TokenLength, handshake)
-				hsh.TokenSource = &c.TokenSource
-				// Create a new tunnel for the new client application connection.
-				tun := tunnel.NewTunnel(&stream, constants.ClientEndpoint)
-				tun.Conn = &conn
-				tun.Hsh = &hsh
-				if !tun.HandShake(ctx) {
-					return
-				}
-				tun.Establish(ctx)
-			}()
+			}
 		}
-	}
+	}()
+	<-c.DoneCh
+	log.Info("The client is going to close")
 }
 
 func handshake(ctx context.Context, stream *quic.Stream, hsh *tunnel.HandshakeHelper) (bool, *net.Conn) {
