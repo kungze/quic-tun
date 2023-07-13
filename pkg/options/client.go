@@ -8,6 +8,8 @@ type ClientOptions struct {
 	ServerEndpointSocket string `json:"server-endpoint"     mapstructure:"server-endpoint"`
 	TokenPlugin          string `json:"token-source-plugin" mapstructure:"token-source-plugin"`
 	TokenSource          string `json:"token-source"        mapstructure:"token-source"`
+	MiddleEndpoint       string `json:"middle-endpoint"     mapstructure:"middle-endpoint"`
+	SignKey              string `json:"sign-key"            mapstructure:"sign-key"`
 }
 
 // GetDefaultClientOptions returns a client configuration with default values.
@@ -17,6 +19,8 @@ func GetDefaultClientOptions() *ClientOptions {
 		ServerEndpointSocket: "",
 		TokenPlugin:          "Fixed",
 		TokenSource:          "",
+		MiddleEndpoint:       "",
+		SignKey:              "",
 	}
 }
 
@@ -30,4 +34,8 @@ func (s *ClientOptions) AddFlags(fs *pflag.FlagSet) {
 		"Specify the token plugin. Token used to tell the server endpoint which server app we want to access. Support values: Fixed, File.")
 	fs.StringVar(&s.TokenSource, "token-source", s.TokenSource,
 		"An argument to be passed to the token source plugin on instantiation.")
+	fs.StringVar(&s.MiddleEndpoint, "middle-endpoint", s.MiddleEndpoint,
+		"Currently only used to connect to the hole punch server.")
+	fs.StringVar(&s.SignKey, "sign-key", s.SignKey,
+		"Used to match the corresponding service.")
 }

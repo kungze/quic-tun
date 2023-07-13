@@ -170,6 +170,34 @@ If the client endpoint token is encoded by ``base64``
 ./quictun-server --listen-on 172.18.31.36:7500 --token-parser-plugin Cleartext --token-parser-key base64
 ```
 
+## Hole-punching mode
+
+`quictun-middle` is designed to assist `quictun-server` and `quictun-client` with hole-punching 
+
+Note it can't penetrate all types of NAT devices.
+
+1. Start up quictun-middle endpoint
+
+**quictun-middle must be a host on the public network**
+
+```shell
+./quictun-middle --listen-on 0.0.0.0:3737
+```
+
+2. Start up quictun-server endpoint
+
+```shell
+./quictun-server --middle-endpoint 52.194.22.121:3737 --sign-key tianjin-changsha1
+```
+
+3. Start up quictun-client endpoint
+
+```shell
+./quictun-client --middle-endpoint 52.194.22.121:3737 --listen-on tcp:0.0.0.0:6500 --token-source tcp:172.18.30.117:22 --sign-key tianjin-changsha1
+```
+
+Note: A pair of quictun-server and quictun-client sgin-keys need to be consistent
+
 ## Restful API
 
 ``quic-tun`` also provide some restful API. By these APIs, you can query the information of the tunnels which are active.

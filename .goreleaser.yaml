@@ -23,6 +23,15 @@ builds:
     goarch:
       - amd64
       - arm64
+  - main: ./middle/cmd
+    id: middle
+    binary: quictun-middle
+    goos:
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
 checksum:
   name_template: 'checksums.txt'
 snapshot:
