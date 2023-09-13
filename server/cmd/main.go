@@ -114,6 +114,7 @@ func runFunc(so *options.ServerOptions, ao *options.RestfulAPIOptions, seco *opt
 			Certificates: []tls.Certificate{tlsCert},
 			NextProtos:   []string{"quic-tun"},
 		}
+		
 	}
 	if verifyClient {
 		if caFile == "" {
@@ -132,6 +133,7 @@ func runFunc(so *options.ServerOptions, ao *options.RestfulAPIOptions, seco *opt
 			certPool.AppendCertsFromPEM(caPemBlock)
 			tlsConfig.ClientCAs = certPool
 		}
+		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
 	// Start API server
