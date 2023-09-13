@@ -9,7 +9,7 @@ import (
 	"github.com/lucas-clemente/quic-go"
 )
 
-type handshakefunc func(context.Context, *quic.Stream, *HandshakeHelper) (bool, *net.Conn)
+type handshakefunc func(context.Context, *quic.Stream, *HandshakeHelper, string) (bool, *net.Conn)
 
 type HandshakeHelper struct {
 	// The function used to process handshake, the handshake processes

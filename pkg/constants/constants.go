@@ -21,16 +21,20 @@ const (
 
 // The key names of log's additional key/value pairs
 const (
-	ClientAppAddr      = "Client-App-Addr"
-	StreamID           = "Stream-ID"
-	ServerAppAddr      = "Server-App-Addr"
-	ClientEndpointAddr = "Client-Endpoint-Addr"
+	ClientAppAddr        = "Client-App-Addr"
+	StreamID             = "Stream-ID"
+	ServerAppAddr        = "Server-App-Addr"
+	ClientEndpointAddr   = "Client-Endpoint-Addr"
+	FileTokenTypeAddress = "address"
+	FileTokenTypePort    = "port"
+	ClientAccessPort     = "Client-Access-Port"
 )
 
 // The key names of value context
 const (
 	CtxRemoteEndpointAddr keytype = "Remote-Endpoint-Addr"
 	CtxClientAppAddr      keytype = "Client-App-Addr"
+	CtxFileTokenType      keytype = "File-Token-Type" // address or port
 )
 
 const (

@@ -36,13 +36,14 @@ type tunnel struct {
 	// Used to cache the header data from QUIC stream
 	streamCache *classifier.HeaderCache
 	// Used to cache the header data from TCP/UNIX socket connection
-	connCache *classifier.HeaderCache
+	connCache  *classifier.HeaderCache
+	AccessPort string
 }
 
 // Before the tunnel establishment, client endpoint and server endpoint need to
 // process handshake steps (client endpoint send token, server endpont parse and verify token)
 func (t *tunnel) HandShake(ctx context.Context) bool {
-	res, conn := t.Hsh.Handshakefunc(ctx, t.Stream, t.Hsh)
+	res, conn := t.Hsh.Handshakefunc(ctx, t.Stream, t.Hsh, t.AccessPort)
 	if conn != nil {
 		t.Conn = conn
 	}

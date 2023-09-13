@@ -2,7 +2,7 @@ package token
 
 import (
 	"bufio"
-	"errors"
+	"fmt"
 	"os"
 	"strings"
 )
@@ -11,21 +11,31 @@ type fileTokenSourcePlugin struct {
 	filePath string
 }
 
-func (t fileTokenSourcePlugin) GetToken(addr string) (string, error) {
-	ipAddr := strings.Split(addr, ":")[0]
+func (t fileTokenSourcePlugin) GetToken(ipOrPort string) (string, error) {
 	file, err := os.Open(t.filePath)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to open file %s: %w", t.filePath, err)
 	}
 	defer file.Close()
+
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, ipAddr) {
-			return strings.Split(line, " ")[1], nil
+		items := strings.Split(line, " ")
+		if len(items) != 2 {
+			continue
+		}
+		addr := items[0]
+		token := items[1]
+		if addr == ipOrPort {
+			return token, nil
 		}
 	}
-	return "", errors.New("don't find valid token")
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("failed to scan file %s: %w", t.filePath, err)
+	}
+
+	return "", fmt.Errorf("cannot find token for %s in file %s", ipOrPort, t.filePath)
 }
 
 // NewFileTokenSourcePlugin return a ``File`` type token source plugin.

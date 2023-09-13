@@ -29,6 +29,7 @@ var (
 	serOptions *options.ServerOptions
 	apiOptions *options.RestfulAPIOptions
 	secOptions *options.SecureOptions
+	ntOptions  *options.NATTraversalOptions
 	logOptions *log.Options
 )
 
@@ -38,7 +39,7 @@ func buildCommand(basename string) *cobra.Command {
 		Short: "Start up the server side endpoint",
 		Long: `Establish a fast&security tunnel,
 make you can access remote TCP/UNIX application like local application.
-	   
+
 Find more quic-tun information at:
 	https://github.com/kungze/quic-tun/blob/master/README.md`,
 		RunE: runCommand,
@@ -48,6 +49,7 @@ Find more quic-tun information at:
 	serOptions.AddFlags(rootCmd.Flags())
 	apiOptions.AddFlags(rootCmd.Flags())
 	secOptions.AddFlags(rootCmd.Flags())
+	ntOptions.AddFlags(rootCmd.Flags())
 	options.AddConfigFlag(basename, rootCmd.Flags())
 	logOptions.AddFlags(rootCmd.Flags())
 
@@ -72,6 +74,10 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	if err := viper.Unmarshal(secOptions); err != nil {
+		return err
+	}
+
+	if err := viper.Unmarshal(ntOptions); err != nil {
 		return err
 	}
 
@@ -140,7 +146,7 @@ func runFunc(so *options.ServerOptions, ao *options.RestfulAPIOptions, seco *opt
 		TlsConfig:   tlsConfig,
 		TokenParser: loadTokenParserPlugin(tokenParserPlugin, tokenParserKey),
 	}
-	s.Start()
+	s.Start(ntOptions)
 }
 
 // Setup a bare-bones TLS config for the server
@@ -181,6 +187,7 @@ func main() {
 	serOptions = options.GetDefaultServerOptions()
 	apiOptions = options.GetDefaultRestfulAPIOptions()
 	secOptions = options.GetDefaultSecureOptions()
+	ntOptions = options.GetDefaultNATTraversalOptions()
 	logOptions = log.NewOptions()
 
 	rootCmd := buildCommand("quictun-server")

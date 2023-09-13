@@ -1,6 +1,8 @@
 package options
 
-import "github.com/spf13/pflag"
+import (
+	"github.com/spf13/pflag"
+)
 
 //ServerOptions contains information for a client service.
 type ServerOptions struct {
