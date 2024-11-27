@@ -2,9 +2,9 @@
 
 # Client
 listen-on: "tcp:127.0.0.1:6500" # (default "tcp:127.0.0.1:6500")
-server-endpoint: "192.168.110.116:7501" # The address to connect to the QUIC-TUN server. (eg 192.168.xxx.xxx:7500)
-token-source-plugin: "Fixed" # (default "Fixed")
-token-source: "tcp:192.168.110.116:22" # (eg tcp:192.168.110.116:22)
+server-endpoint: "127.0.0.1:7500" # The address to connect to the QUIC-TUN server. (eg 192.168.xxx.xxx:7500)
+token-source-plugin: "file" # (default "Fixed")
+token-source: "./configs/tokenList" # (eg tcp:192.168.110.116:22)
 
 # TLS
 cert-file: "" # x509 certificate
@@ -13,7 +13,7 @@ verify-remote-endpoint: false # (default false)
 ca-file: ""
 
 # RestfulAPI
-httpd-listen-on: "0.0.0.0:8086" # (default 0.0.0.0:8086)
+httpd-listen-on: "0.0.0.0:8085" # (default 0.0.0.0:8086)
 
 # LOG
 log-name: quictun-client # Logger's name
