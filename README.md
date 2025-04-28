@@ -7,10 +7,12 @@
 [3]: https://img.shields.io/github/license/kungze/quic-tun
 [4]: LICENSE
 
+**WARNING**
+
+  This project is no longer maintained. If you're looking for a replacement, please check out [wovenet](https://github.com/kungze/wovenet). It not only fully implements all the core features of quic-tun, but also provides many additional interesting and useful functionalities.
+
 Establish a fast&security tunnel, make you can access remote TCP/UNIX
 application like local application.
-
-[中文文档](https://kungze.github.io/documents/quic-tun)
 
 ## Overview
 
