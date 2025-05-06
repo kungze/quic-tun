@@ -94,6 +94,8 @@ func runFunc(so *options.ServerOptions, ao *options.RestfulAPIOptions, seco *opt
 	caFile := seco.CaFile
 	tokenParserPlugin := so.TokenParserPlugin
 	tokenParserKey := so.TokenParserKey
+	middleEndpoint := so.MiddleEndpoint
+	signKey := so.SignKey
 
 	var tlsConfig *tls.Config
 	if keyFile == "" || certFile == "" {
@@ -136,9 +138,17 @@ func runFunc(so *options.ServerOptions, ao *options.RestfulAPIOptions, seco *opt
 
 	// Start server endpoint
 	s := &server.ServerEndpoint{
-		Address:     so.ListenOn,
-		TlsConfig:   tlsConfig,
-		TokenParser: loadTokenParserPlugin(tokenParserPlugin, tokenParserKey),
+		Address:        so.ListenOn,
+		TlsConfig:      tlsConfig,
+		TokenParser:    loadTokenParserPlugin(tokenParserPlugin, tokenParserKey),
+		MiddleEndpoint: middleEndpoint,
+		SignKey:        signKey,
+	}
+	if s.MiddleEndpoint != "" {
+		err := s.PrepareStart()
+		if err != nil {
+			panic(err)
+		}
 	}
 	s.Start()
 }

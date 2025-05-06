@@ -88,6 +88,8 @@ func runFunc(co *options.ClientOptions, ao *options.RestfulAPIOptions, seco *opt
 	serverEndpointSocket := co.ServerEndpointSocket
 	tokenPlugin := co.TokenPlugin
 	tokenSource := co.TokenSource
+	middleEndpoint := co.MiddleEndpoint
+	signKey := co.SignKey
 	certFile := seco.CertFile
 	keyFile := seco.KeyFile
 	caFile := seco.CaFile
@@ -133,7 +135,17 @@ func runFunc(co *options.ClientOptions, ao *options.RestfulAPIOptions, seco *opt
 		ServerEndpointSocket: serverEndpointSocket,
 		TokenSource:          loadTokenSourcePlugin(tokenPlugin, tokenSource),
 		TlsConfig:            tlsConfig,
+		MiddleEndpoint:       middleEndpoint,
+		SignKey:              signKey,
 	}
+
+	if c.MiddleEndpoint != "" {
+		err := c.PrepareStart()
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	c.Start()
 }
 

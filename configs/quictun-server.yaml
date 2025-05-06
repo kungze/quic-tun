@@ -4,6 +4,8 @@
 listen-on: "0.0.0.0:7500" # (default "0.0.0.0:7500")
 token-parser-plugin: "Cleartext" # (default "Cleartext")
 token-parser-key: "" # (default "")
+middle-endpoint: "192.168.110.116:3737" # (default "")
+sign-key: "sk1" # (default "")
 
 # TLS
 cert-file: "" # x509 certificate
