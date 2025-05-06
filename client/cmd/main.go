@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -25,6 +26,7 @@ var (
 	clientOptions *options.ClientOptions
 	apiOptions    *options.RestfulAPIOptions
 	secOptions    *options.SecureOptions
+	ntOptions     *options.NATTraversalOptions
 	logOptions    *log.Options
 )
 
@@ -34,7 +36,7 @@ func buildCommand(basename string) *cobra.Command {
 		Short: "Start up the client side endpoint",
 		Long: `Establish a fast&security tunnel,
 make you can access remote TCP/UNIX application like local application.
-	   
+
 Find more quic-tun information at:
 	https://github.com/kungze/quic-tun/blob/master/README.md`,
 		RunE: runCommand,
@@ -44,6 +46,7 @@ Find more quic-tun information at:
 	clientOptions.AddFlags(rootCmd.Flags())
 	apiOptions.AddFlags(rootCmd.Flags())
 	secOptions.AddFlags(rootCmd.Flags())
+	ntOptions.AddFlags(rootCmd.Flags())
 	options.AddConfigFlag(basename, rootCmd.Flags())
 	logOptions.AddFlags(rootCmd.Flags())
 
@@ -71,6 +74,10 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if err := viper.Unmarshal(ntOptions); err != nil {
+		return err
+	}
+
 	if err := viper.Unmarshal(logOptions); err != nil {
 		return err
 	}
@@ -94,33 +101,10 @@ func runFunc(co *options.ClientOptions, ao *options.RestfulAPIOptions, seco *opt
 	verifyServer := seco.VerifyRemoteEndpoint
 	apiListenOn := ao.HttpdListenOn
 
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: !verifyServer,
-		NextProtos:         []string{"quic-tun"},
-	}
-	if certFile != "" && keyFile != "" {
-		tlsCert, err := tls.LoadX509KeyPair(certFile, keyFile)
-		if err != nil {
-			log.Errorw("Certificate file or private key file is invalid.", "error", err.Error())
-			return
-		}
-		tlsConfig.Certificates = []tls.Certificate{tlsCert}
-	}
-	if caFile != "" {
-		caPemBlock, err := os.ReadFile(caFile)
-		if err != nil {
-			log.Errorw("Failed to read ca file.", "error", err.Error())
-		}
-		certPool := x509.NewCertPool()
-		certPool.AppendCertsFromPEM(caPemBlock)
-		tlsConfig.RootCAs = certPool
-	} else {
-		certPool, err := x509.SystemCertPool()
-		if err != nil {
-			log.Errorw("Failed to load system cert pool", "error", err.Error())
-			return
-		}
-		tlsConfig.ClientCAs = certPool
+	tlsConfig, err := buildTlsConfig(certFile, keyFile, caFile, verifyServer)
+	if err != nil {
+		log.Errorw("Failed to build TLS config.", "error", err.Error())
+		return
 	}
 
 	// Start API server
@@ -128,13 +112,46 @@ func runFunc(co *options.ClientOptions, ao *options.RestfulAPIOptions, seco *opt
 	go httpd.Start()
 
 	// Start client endpoint
-	c := client.ClientEndpoint{
+	clientEndpoint := client.ClientEndpoint{
 		LocalSocket:          localSocket,
 		ServerEndpointSocket: serverEndpointSocket,
 		TokenSource:          loadTokenSourcePlugin(tokenPlugin, tokenSource),
 		TlsConfig:            tlsConfig,
+		ClientOpitons:        *co,
+		FileTokenType:        "",
+		ListenerByPort:       make(map[int]*net.Listener),
 	}
-	c.Start()
+	clientEndpoint.Start(ntOptions)
+}
+
+func buildTlsConfig(certFile, keyFile, caFile string, verifyServer bool) (*tls.Config, error) {
+	tlsConfig := &tls.Config{InsecureSkipVerify: !verifyServer, NextProtos: []string{"quic-tun"}}
+
+	if certFile != "" && keyFile != "" {
+		tlsCert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load X509 key pair: %v", err)
+		}
+		tlsConfig.Certificates = []tls.Certificate{tlsCert}
+	}
+
+	if caFile != "" {
+		caPemBlock, err := os.ReadFile(caFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read CA file: %v", err)
+		}
+		certPool := x509.NewCertPool()
+		certPool.AppendCertsFromPEM(caPemBlock)
+		tlsConfig.RootCAs = certPool
+	} else {
+		certPool, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load system cert pool: %v", err)
+		}
+		tlsConfig.ClientCAs = certPool
+	}
+
+	return tlsConfig, nil
 }
 
 func loadTokenSourcePlugin(plugin string, source string) token.TokenSourcePlugin {
@@ -155,6 +172,7 @@ func main() {
 	clientOptions = options.GetDefaultClientOptions()
 	apiOptions = options.GetDefaultRestfulAPIOptions()
 	secOptions = options.GetDefaultSecureOptions()
+	ntOptions = options.GetDefaultNATTraversalOptions()
 	logOptions = log.NewOptions()
 
 	rootCmd := buildCommand("quictun-client")

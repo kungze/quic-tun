@@ -9,6 +9,8 @@ import (
 
 	"github.com/kungze/quic-tun/pkg/constants"
 	"github.com/kungze/quic-tun/pkg/log"
+	nattraversal "github.com/kungze/quic-tun/pkg/nat-traversal"
+	"github.com/kungze/quic-tun/pkg/options"
 	"github.com/kungze/quic-tun/pkg/token"
 	"github.com/kungze/quic-tun/pkg/tunnel"
 	"github.com/lucas-clemente/quic-go"
@@ -20,15 +22,60 @@ type ServerEndpoint struct {
 	TokenParser token.TokenParserPlugin
 }
 
-func (s *ServerEndpoint) Start() {
+func (s *ServerEndpoint) Start(nt *options.NATTraversalOptions) {
+	if nt.NATTraversalMode {
+		for {
+			connCtrl := nattraversal.NewConnCtrl(nt)
+			// Subscribe and wait for messages from the remote peer
+			connCtrl.MqttClient = nattraversal.NewMQTTClient(connCtrl.Nt, connCtrl.SdCh)
+			nattraversal.Subscribe(connCtrl.MqttClient)
+			log.Debug("wait for new client connection")
+			connCtrl.RemoteSd = <-connCtrl.SdCh
+			ctx, cancel := context.WithCancel(context.TODO())
+			go func() {
+				go nattraversal.ListenUDP(ctx, connCtrl)
+				select {
+				case <-connCtrl.ExitChan:
+					log.Warn("first nat traversal failed, the second nat traversal attempt")
+					go nattraversal.DialUDP(ctx, connCtrl)
+					select {
+					case <-connCtrl.ConvertExitChan:
+						log.Warn("nat traversal faild!")
+						cancel()
+					case conn := <-connCtrl.ConnChan:
+						log.Infof("nat traversal success! Remote address is %s", conn.Conn.RemoteAddr())
+						go s.new(conn)
+					}
+				case conn := <-connCtrl.ConnChan:
+					log.Info("nat traversal success!")
+					go s.new(conn)
+				}
+			}()
+		}
+	} else {
+		laddr, err := net.ResolveUDPAddr("udp", s.Address)
+		if err != nil {
+			panic(err)
+		}
+		conn, err := net.ListenUDP("udp", laddr)
+		if err != nil {
+			panic(err)
+		}
+		s.new(conn)
+	}
+}
+
+func (s *ServerEndpoint) new(conn net.PacketConn) {
 	// Listen a quic(UDP) socket.
-	listener, err := quic.ListenAddr(s.Address, s.TlsConfig, nil)
+	// listener, err := quic.ListenAddr(s.Address, s.TlsConfig, nil)
+	listener, err := quic.Listen(conn, s.TlsConfig, nil)
 	if err != nil {
 		panic(err)
 	}
 	defer listener.Close()
 	log.Infow("Server endpoint start up successful", "listen address", listener.Addr())
 	for {
+		log.Debug("Wait client endpoint connect.")
 		// Wait client endpoint connection request.
 		session, err := listener.Accept(context.Background())
 		if err != nil {
@@ -39,12 +86,14 @@ func (s *ServerEndpoint) Start() {
 			logger.Info("A new client endpoint connect request accepted.")
 			go func() {
 				for {
+					logger.Debug("Wait stream connection.")
 					// Wait client endpoint open a stream (A new steam means a new tunnel)
 					stream, err := session.AcceptStream(context.Background())
 					if err != nil {
 						logger.Errorw("Cannot accept a new stream.", "error", err.Error())
 						break
 					}
+					logger.Debug("A new stream accepted.")
 					logger := logger.WithValues(constants.StreamID, stream.StreamID())
 					ctx := logger.WithContext(parent_ctx)
 					hsh := tunnel.NewHandshakeHelper(constants.AckMsgLength, handshake)
@@ -64,7 +113,7 @@ func (s *ServerEndpoint) Start() {
 	}
 }
 
-func handshake(ctx context.Context, stream *quic.Stream, hsh *tunnel.HandshakeHelper) (bool, *net.Conn) {
+func handshake(ctx context.Context, stream *quic.Stream, hsh *tunnel.HandshakeHelper, accessPort string) (bool, *net.Conn) {
 	logger := log.FromContext(ctx)
 	logger.Info("Starting handshake with client endpoint")
 	if _, err := io.CopyN(hsh, *stream, constants.TokenLength); err != nil {
@@ -75,7 +124,7 @@ func handshake(ctx context.Context, stream *quic.Stream, hsh *tunnel.HandshakeHe
 	if err != nil {
 		logger.Errorw("Failed to parse token", "error", err.Error())
 		hsh.SetSendData([]byte{constants.ParseTokenError})
-		_, _ = io.Copy(*stream, hsh)
+		_, _ = io.CopyN(*stream, hsh, constants.AckMsgLength)
 		return false, nil
 	}
 	logger = logger.WithValues(constants.ServerAppAddr, addr)
@@ -85,7 +134,7 @@ func handshake(ctx context.Context, stream *quic.Stream, hsh *tunnel.HandshakeHe
 	if err != nil {
 		logger.Errorw("Failed to dial server app", "error", err.Error())
 		hsh.SetSendData([]byte{constants.CannotConnServer})
-		_, _ = io.Copy(*stream, hsh)
+		_, _ = io.CopyN(*stream, hsh, constants.AckMsgLength)
 		return false, nil
 	}
 	logger.Info("Server app connect successful")
