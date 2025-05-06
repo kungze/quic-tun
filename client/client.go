@@ -10,6 +10,8 @@ import (
 
 	"github.com/kungze/quic-tun/pkg/constants"
 	"github.com/kungze/quic-tun/pkg/log"
+	nattraversal "github.com/kungze/quic-tun/pkg/nat-traversal"
+	"github.com/kungze/quic-tun/pkg/options"
 	"github.com/kungze/quic-tun/pkg/token"
 	"github.com/kungze/quic-tun/pkg/tunnel"
 	"github.com/lucas-clemente/quic-go"
@@ -22,9 +24,49 @@ type ClientEndpoint struct {
 	TlsConfig            *tls.Config
 }
 
-func (c *ClientEndpoint) Start() {
+func (c *ClientEndpoint) Start(nt *options.NATTraversalOptions) {
+	if nt.NATTraversalMode {
+		ctx, cancel := context.WithCancel(context.TODO())
+		defer cancel()
+		connCtrl := nattraversal.NewConnCtrl(nt)
+		go nattraversal.DialUDP(ctx, connCtrl)
+		select {
+		case <-connCtrl.ExitChan:
+			log.Warn("first nat traversal failed, the second nat traversal attempt")
+			// Subscribe and wait for messages from the remote peer
+			connCtrl.MqttClient = nattraversal.NewMQTTClient(connCtrl.Nt, connCtrl.SdCh)
+			nattraversal.Subscribe(connCtrl.MqttClient)
+			connCtrl.RemoteSd = <-connCtrl.SdCh
+			go nattraversal.ListenUDP(ctx, connCtrl)
+			select {
+			case <-connCtrl.ConvertExitChan:
+				log.Warn("nat traversal faild!")
+				cancel()
+			case conn := <-connCtrl.ConnChan:
+				log.Info("nat traversal success!")
+				c.new(conn, conn.Conn.RemoteAddr(), conn.Conn.LocalAddr().String())
+			}
+		case conn := <-connCtrl.ConnChan:
+			log.Infof("nat traversal success! Remote address is %s", conn.Conn.RemoteAddr())
+			c.new(conn, conn.Conn.RemoteAddr(), conn.Conn.LocalAddr().String())
+		}
+	} else {
+		raddr, err := net.ResolveUDPAddr("udp", c.ServerEndpointSocket)
+		if err != nil {
+			panic(err)
+		}
+		conn, err := net.DialUDP("udp", nil, raddr)
+		if err != nil {
+			panic(err)
+		}
+		c.new(conn, raddr, c.ServerEndpointSocket)
+	}
+}
+
+func (c *ClientEndpoint) new(conn net.PacketConn, raddr net.Addr, host string) {
 	// Dial server endpoint
-	session, err := quic.DialAddr(c.ServerEndpointSocket, c.TlsConfig, &quic.Config{KeepAlive: true})
+	// quic.DialAddr()
+	session, err := quic.Dial(conn, raddr, host, c.TlsConfig, &quic.Config{KeepAlive: true})
 	if err != nil {
 		panic(err)
 	}
